@@ -1,0 +1,357 @@
+---
+import "../styles/site.css";
+
+const repository = "https://github.com/charrixxz23/it-infrastructure-monitoring-center";
+const repositoryDocs = `${repository}/blob/main/docs`;
+const release = `${repository}/releases/tag/v1.0.0`;
+const ciRun = `${repository}/actions/runs/40116633928`;
+
+const screenshots = [
+  {
+    src: "/screenshots/01-infrastructure-overview.png",
+    titleEs: "IT Infrastructure Overview",
+    titleEn: "IT Infrastructure Overview",
+    categoryEs: "Grafana · 14 paneles",
+    categoryEn: "Grafana · 14 panels",
+    descriptionEs: "KPIs de capacidad, tendencias del host Linux del motor Docker/WSL2 y salud de los dos targets de infraestructura.",
+    descriptionEn: "Capacity KPIs, Docker Engine/WSL2 Linux host trends, and health for the two infrastructure targets.",
+    altEs: "Captura auténtica del dashboard IT Infrastructure Overview con 14 paneles y los volúmenes Windows C: y Docker virtual disk.",
+    altEn: "Authentic IT Infrastructure Overview dashboard screenshot with 14 panels and Windows C: and Docker virtual disk volumes.",
+    width: 2544,
+    height: 1393,
+    featured: true,
+  },
+  {
+    src: "/screenshots/02-docker-container-monitoring.png",
+    titleEs: "Docker Container Monitoring",
+    titleEn: "Docker Container Monitoring",
+    categoryEs: "Grafana · 12 paneles",
+    categoryEn: "Grafana · 12 panels",
+    descriptionEs: "Cinco contenedores observados por el exporter host-side, junto a CPU, memoria, red y frescura de la muestra.",
+    descriptionEn: "Five containers observed by the host-side exporter, with CPU, memory, network, and sample freshness.",
+    altEs: "Captura auténtica del dashboard Docker Container Monitoring: cinco contenedores observados, exporter UP y colección Docker Stats OK.",
+    altEn: "Authentic Docker Container Monitoring dashboard screenshot: five containers observed, exporter UP, and Docker Stats Collection OK.",
+    width: 2532,
+    height: 1405,
+    featured: true,
+  },
+  {
+    src: "/screenshots/03-prometheus-targets.png",
+    titleEs: "Prometheus Targets",
+    titleEn: "Prometheus Targets",
+    categoryEs: "Prometheus · scrape health",
+    categoryEn: "Prometheus · scrape health",
+    descriptionEs: "La captura muestra 3/3 targets UP; incluye container-exporter además de Prometheus y Node Exporter.",
+    descriptionEn: "The capture shows 3/3 targets UP, including container-exporter alongside Prometheus and Node Exporter.",
+    altEs: "Captura auténtica de Prometheus Targets, con los targets container-exporter, node-exporter y prometheus en estado UP.",
+    altEn: "Authentic Prometheus Targets screenshot showing container-exporter, node-exporter, and prometheus as UP.",
+    width: 2559,
+    height: 1180,
+    featured: false,
+  },
+  {
+    src: "/screenshots/04-prometheus-alert-rules.png",
+    titleEs: "Prometheus Alert Rules",
+    titleEn: "Prometheus Alert Rules",
+    categoryEs: "Prometheus · reglas cargadas",
+    categoryEn: "Prometheus · loaded rules",
+    descriptionEs: "Cuatro reglas de infraestructura y TestIncident aparecen INACTIVE durante el estado normal de la captura.",
+    descriptionEn: "Four infrastructure rules and TestIncident appear INACTIVE while the captured lab is in a normal state.",
+    altEs: "Captura auténtica de las reglas de Prometheus con cuatro reglas de infraestructura y TestIncident inactivas.",
+    altEn: "Authentic Prometheus alert rules screenshot with four infrastructure rules and inactive TestIncident.",
+    width: 2559,
+    height: 1135,
+    featured: false,
+  },
+  {
+    src: "/screenshots/05-alertmanager-no-active-groups.png",
+    titleEs: "Alertmanager",
+    titleEn: "Alertmanager",
+    categoryEs: "Alertmanager · estado normal",
+    categoryEn: "Alertmanager · normal state",
+    descriptionEs: "No había grupos de alertas activos en el momento de captura; la imagen no representa una falla del servicio.",
+    descriptionEn: "There were no active alert groups at capture time; the image does not indicate a service failure.",
+    altEs: "Captura auténtica de Alertmanager que indica que no hay grupos de alertas activos.",
+    altEn: "Authentic Alertmanager screenshot indicating no active alert groups.",
+    width: 2559,
+    height: 970,
+    featured: false,
+  },
+  {
+    src: "/screenshots/06-github-actions-ci.png",
+    titleEs: "GitHub Actions CI",
+    titleEn: "GitHub Actions CI",
+    categoryEs: "GitHub Actions · cuatro jobs",
+    categoryEn: "GitHub Actions · four jobs",
+    descriptionEs: "Evidencia visual de la ejecución #4. El enlace CI superior lleva a una ejecución más reciente verificada en main.",
+    descriptionEn: "Visual evidence from run #4. The CI link above points to a newer run verified on main.",
+    altEs: "Captura auténtica de GitHub Actions con los cuatro jobs de CI en estado exitoso.",
+    altEn: "Authentic GitHub Actions screenshot with all four CI jobs successful.",
+    width: 2550,
+    height: 1114,
+    featured: false,
+  },
+];
+
+const stack = [
+  { name: "Prometheus", version: "3.15.0", roleEs: "Scraping, reglas y TSDB", roleEn: "Scraping, rules, and TSDB" },
+  { name: "Grafana", version: "13.2.4", roleEs: "Dashboards provisionados", roleEn: "Provisioned dashboards" },
+  { name: "Node Exporter", version: "1.12.1", roleEs: "Métricas del Linux del Engine", roleEn: "Docker Engine Linux metrics" },
+  { name: "Alertmanager", version: "0.34.1", roleEs: "Agrupación y notificaciones", roleEn: "Alert grouping and delivery" },
+  { name: "Incident Logger", version: "Python 3.13", roleEs: "Webhook interno e historial rotado", roleEn: "Internal webhook and rotated history" },
+  { name: "Container Exporter", version: "Python 3.10+", roleEs: "Opcional · proceso manual en Windows", roleEn: "Optional · manually started Windows process" },
+];
+
+const jobs = [
+  { name: "Python 3.10 tests", detailEs: "Pruebas unitarias y scripts PowerShell", detailEn: "Unit tests and PowerShell script parsing" },
+  { name: "Python 3.13 tests", detailEs: "Pruebas unitarias y scripts PowerShell", detailEn: "Unit tests and PowerShell script parsing" },
+  { name: "Static quality and security checks", detailEs: "Lint, dependencias, higiene y secretos", detailEn: "Lint, dependencies, repository hygiene, and secret scan" },
+  { name: "Dashboard and monitoring configuration validation", detailEs: "Dashboards, Compose, Prometheus y Alertmanager", detailEn: "Dashboards, Compose, Prometheus, and Alertmanager" },
+];
+
+const docs = [
+  { href: `${repositoryDocs}/architecture.md`, labelEs: "Arquitectura", labelEn: "Architecture" },
+  { href: `${repositoryDocs}/diagrams.md`, labelEs: "Diagramas actuales", labelEn: "Current diagrams" },
+  { href: `${repositoryDocs}/container-exporter.md`, labelEs: "Exporter de contenedores", labelEn: "Container exporter" },
+  { href: `${repositoryDocs}/ci.md`, labelEs: "Integración continua", labelEn: "Continuous integration" },
+  { href: `${repositoryDocs}/troubleshooting.md`, labelEs: "Troubleshooting", labelEn: "Troubleshooting" },
+];
+---
+
+<!doctype html>
+<html lang="es" data-locale="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0b1118" />
+    <meta name="description" content="IT Infrastructure Monitoring Center: laboratorio DevOps/SRE de observabilidad con Prometheus, Grafana, alertas y evidencia reproducible." />
+    <meta property="og:title" content="IT Infrastructure Monitoring Center" />
+    <meta property="og:description" content="DevOps & SRE observability portfolio. Evidence from a local monitoring lab; cloud hosting is planned." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/screenshots/01-infrastructure-overview.png" />
+    <title>IT Infrastructure Monitoring Center · DevOps &amp; SRE</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main"><span class="lang-es">Saltar al contenido</span><span class="lang-en">Skip to content</span></a>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="#top" aria-label="IT Infrastructure Monitoring Center">
+          <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+          <span class="brand-copy"><strong>ITMC</strong><small>OBSERVABILITY LAB</small></span>
+        </a>
+        <nav class="primary-nav" aria-label="Primary navigation">
+          <a href="#overview"><span class="lang-es">Proyecto</span><span class="lang-en">Project</span></a>
+          <a href="#architecture"><span class="lang-es">Arquitectura</span><span class="lang-en">Architecture</span></a>
+          <a href="#dashboards"><span class="lang-es">Dashboards</span><span class="lang-en">Dashboards</span></a>
+          <a href="#delivery"><span class="lang-es">CI</span><span class="lang-en">CI</span></a>
+          <a href="#roadmap"><span class="lang-es">Roadmap</span><span class="lang-en">Roadmap</span></a>
+        </nav>
+        <div class="header-actions">
+          <div class="locale-switch" role="group" aria-label="Language">
+            <button type="button" data-locale-button="es" aria-pressed="true">ES</button>
+            <button type="button" data-locale-button="en" aria-pressed="false">EN</button>
+          </div>
+          <a class="button button-small button-outline" href={repository} target="_blank" rel="noreferrer noopener">
+            GitHub <span aria-hidden="true">↗</span>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero section" id="top" aria-labelledby="hero-title">
+        <div class="container hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow"><span class="eyebrow-mark" aria-hidden="true"></span><span class="lang-es">PORTAFOLIO DEVOPS / SRE · LABORATORIO LOCAL</span><span class="lang-en">DEVOPS / SRE PORTFOLIO · LOCAL LAB</span></p>
+            <h1 id="hero-title">IT Infrastructure<br /><span>Monitoring Center</span></h1>
+            <p class="hero-kicker">DevOps &amp; SRE Observability Platform</p>
+            <p class="hero-description lang-es">Un laboratorio reproducible para observar infraestructura y contenedores, probar el ciclo de alertas y validar configuraciones con evidencia real.</p>
+            <p class="hero-description lang-en">A reproducible lab for infrastructure and container observability, alert lifecycle testing, and configuration validation backed by real evidence.</p>
+            <div class="hero-tags" aria-label="Project capabilities">
+              <span>Prometheus</span><span>Grafana</span><span>Alertmanager</span><span>Docker Compose</span>
+            </div>
+            <div class="hero-actions">
+              <a class="button button-primary" href="#architecture"><span class="lang-es">Explorar arquitectura</span><span class="lang-en">Explore architecture</span><span aria-hidden="true">→</span></a>
+              <a class="button button-quiet" href="#dashboards"><span class="lang-es">Ver dashboards</span><span class="lang-en">View dashboards</span><span aria-hidden="true">↓</span></a>
+            </div>
+            <div class="hero-links">
+              <a href={repository} target="_blank" rel="noreferrer noopener"><span class="lang-es">Repositorio GitHub</span><span class="lang-en">GitHub repository</span><span aria-hidden="true">↗</span></a>
+              <a href={release} target="_blank" rel="noreferrer noopener">Release v1.0.0 <span aria-hidden="true">↗</span></a>
+            </div>
+          </div>
+
+          <aside class="hero-console" aria-label="Static architecture summary">
+            <div class="console-topline"><span class="console-label"><span class="signal-dot" aria-hidden="true"></span><span class="lang-es">VISTA DEL LABORATORIO</span><span class="lang-en">LAB OVERVIEW</span></span><span class="console-date">EVIDENCE · 24 OCT 2026</span></div>
+            <div class="console-title"><div><span class="console-overline"><span class="lang-es">ENTORNO OBSERVADO</span><span class="lang-en">OBSERVED ENVIRONMENT</span></span><strong>Docker Engine Linux</strong></div><span class="console-badge">WSL2</span></div>
+            <div class="topology" aria-label="Prometheus receives host and exporter metrics; Grafana visualizes them and Alertmanager forwards incidents to the logger.">
+              <div class="topology-source">
+                <span class="topology-icon" aria-hidden="true">H</span>
+                <span><strong>Linux Engine</strong><small><span class="lang-es">CPU · RAM · disco · red</span><span class="lang-en">CPU · RAM · disk · network</span></small></span>
+              </div>
+              <div class="topology-arrow" aria-hidden="true"><span></span></div>
+              <div class="topology-prom"><span class="topology-icon" aria-hidden="true">P</span><span><strong>Prometheus</strong><small>scrape · rules · TSDB</small></span></div>
+              <div class="topology-branches">
+                <div class="topology-branch"><span class="branch-line" aria-hidden="true"></span><span class="topology-icon icon-grafana" aria-hidden="true">G</span><span><strong>Grafana</strong><small>14 + 12 panels</small></span></div>
+                <div class="topology-branch"><span class="branch-line" aria-hidden="true"></span><span class="topology-icon icon-alert" aria-hidden="true">A</span><span><strong>Alertmanager</strong><small>→ Incident Logger</small></span></div>
+              </div>
+            </div>
+            <div class="console-foot"><span class="lang-es">Evidencia estática, no una conexión en vivo.</span><span class="lang-en">Static evidence, not a live connection.</span><span class="console-foot-line" aria-hidden="true"></span></div>
+          </aside>
+        </div>
+        <div class="container hero-metrics" aria-label="Verified project scope">
+          <div><strong>05</strong><span class="lang-es">servicios Compose</span><span class="lang-en">Compose services</span></div>
+          <div><strong>02</strong><span class="lang-es">dashboards provisionados</span><span class="lang-en">provisioned dashboards</span></div>
+          <div><strong>26</strong><span class="lang-es">paneles Grafana</span><span class="lang-en">Grafana panels</span></div>
+          <div><strong>04</strong><span class="lang-es">jobs CI validados en main</span><span class="lang-en">CI jobs verified on main</span></div>
+          <p><span class="lang-es">Alcance basado en configuración y evidencia; no son contadores en vivo.</span><span class="lang-en">Scope from configuration and evidence; these are not live counters.</span></p>
+        </div>
+      </section>
+
+      <section class="section section-border" id="overview" aria-labelledby="overview-title">
+        <div class="container">
+          <div class="section-heading"><div><p class="section-index">01 / PROJECT OVERVIEW</p><h2 id="overview-title"><span class="lang-es">Observar. Alertar. Aprender.</span><span class="lang-en">Observe. Alert. Learn.</span></h2></div><p class="section-intro lang-es">El proyecto conecta métricas de infraestructura con visibilidad operativa, pruebas controladas de incidentes y validaciones repetibles.</p><p class="section-intro lang-en">The project connects infrastructure metrics to operational visibility, controlled incident tests, and repeatable validation.</p></div>
+          <div class="capability-grid">
+            <article class="capability-card"><span class="card-number">01</span><h3><span class="lang-es">Visibilidad de infraestructura</span><span class="lang-en">Infrastructure visibility</span></h3><p class="lang-es">CPU, memoria, filesystem, red, uptime y disponibilidad de targets a través de Prometheus y Node Exporter.</p><p class="lang-en">CPU, memory, filesystem, network, uptime, and target availability through Prometheus and Node Exporter.</p></article>
+            <article class="capability-card"><span class="card-number">02</span><h3><span class="lang-es">Observación por contenedor</span><span class="lang-en">Per-container observation</span></h3><p class="lang-es">Un proceso Python opcional obtiene snapshots del Docker CLI en el host Windows, filtrados por etiqueta Compose.</p><p class="lang-en">An optional Python process collects Docker CLI snapshots on the Windows host, filtered by Compose project label.</p></article>
+            <article class="capability-card"><span class="card-number">03</span><h3><span class="lang-es">Ciclo de incidentes</span><span class="lang-en">Incident lifecycle</span></h3><p class="lang-es">Reglas Prometheus, agrupación de Alertmanager y registro persistente de notificaciones FIRING y RESOLVED.</p><p class="lang-en">Prometheus rules, Alertmanager grouping, and persistent logging of FIRING and RESOLVED notifications.</p></article>
+            <article class="capability-card"><span class="card-number">04</span><h3><span class="lang-es">Validación reproducible</span><span class="lang-en">Repeatable validation</span></h3><p class="lang-es">Pruebas unitarias y comprobaciones estáticas en runners de GitHub Actions, sin depender de Docker Desktop.</p><p class="lang-en">Unit tests and static checks on GitHub Actions runners, independent of Docker Desktop.</p></article>
+          </div>
+
+          <div class="stack-heading"><div><p class="section-index">IMPLEMENTED STACK</p><h3><span class="lang-es">Tecnologías del repositorio</span><span class="lang-en">Technologies in the repository</span></h3></div><span class="status-pill status-implemented"><span class="status-led" aria-hidden="true"></span><span class="lang-es">Implementado</span><span class="lang-en">Implemented</span></span></div>
+          <div class="stack-grid">
+            {stack.map((item, index) => (
+              <article class="stack-card"><div class="stack-card-top"><span class="stack-index">0{index + 1}</span><span class="stack-version">{item.version}</span></div><h4>{item.name}</h4><p class="lang-es">{item.roleEs}</p><p class="lang-en">{item.roleEn}</p></article>
+            ))}
+          </div>
+          <p class="note-line"><span class="note-symbol" aria-hidden="true">i</span><span class="lang-es"><strong>Alcance del host:</strong> CPU, RAM, red y uptime de Node Exporter representan el Linux que ve Docker Engine/WSL2, no el Windows físico.</span><span class="lang-en"><strong>Host scope:</strong> Node Exporter CPU, memory, network, and uptime describe the Linux environment visible to Docker Engine/WSL2, not physical Windows.</span></p>
+        </div>
+      </section>
+
+      <section class="section section-border" id="dashboards" aria-labelledby="dashboards-title">
+        <div class="container">
+          <div class="section-heading"><div><p class="section-index">02 / DASHBOARD GALLERY</p><h2 id="dashboards-title"><span class="lang-es">Evidencia de observabilidad</span><span class="lang-en">Observability evidence</span></h2></div><p class="section-intro lang-es">Seis capturas auténticas del laboratorio. Los números reflejan el instante capturado; no son métricas actuales ni una demo cloud en vivo.</p><p class="section-intro lang-en">Six authentic lab screenshots. Values reflect their capture time; they are not current metrics or a live cloud demo.</p></div>
+          <div class="gallery-grid">
+            {screenshots.map((item, index) => (
+              <article class:list={["gallery-card", item.featured && "gallery-featured"]}>
+                <button class="gallery-image-button" type="button" data-open-image data-image-src={item.src} data-image-alt-es={item.altEs} data-image-alt-en={item.altEn} data-image-caption-es={`${item.titleEs} — ${item.descriptionEs}`} data-image-caption-en={`${item.titleEn} — ${item.descriptionEn}`} data-aria-es={`Ampliar captura: ${item.titleEs}`} data-aria-en={`Open screenshot: ${item.titleEn}`}>
+                  <img src={item.src} alt={item.altEs} width={item.width} height={item.height} loading={index < 2 ? "eager" : "lazy"} decoding="async" />
+                  <span class="image-open-mark" aria-hidden="true">↗</span>
+                </button>
+                <div class="gallery-copy"><div class="gallery-meta"><span class="lang-es">{item.categoryEs}</span><span class="lang-en">{item.categoryEn}</span><span>0{index + 1}</span></div><h3>{item.titleEs}</h3><p class="lang-es">{item.descriptionEs}</p><p class="lang-en">{item.descriptionEn}</p></div>
+              </article>
+            ))}
+          </div>
+          <div class="gallery-footnote"><span class="footnote-mark" aria-hidden="true">↗</span><p class="lang-es">Las capturas provienen de `screenshots/` y se incluyen sin recorte ni alteración de datos. Usa el visor accesible para ampliarlas.</p><p class="lang-en">Screenshots come from `screenshots/` and are included without cropping or changing their data. Use the accessible viewer to inspect them.</p></div>
+        </div>
+      </section>
+
+      <section class="section section-border" id="architecture" aria-labelledby="architecture-title">
+        <div class="container">
+          <div class="section-heading"><div><p class="section-index">03 / ARCHITECTURE</p><h2 id="architecture-title"><span class="lang-es">Dos entornos, sin confundirlos</span><span class="lang-en">Two environments, clearly separated</span></h2></div><p class="section-intro lang-es">La solución actual es local. La arquitectura cloud está en diseño y no se ha desplegado ni conectado a este host.</p><p class="section-intro lang-en">The current solution is local. The cloud architecture is under design and has not been deployed or connected to this host.</p></div>
+          <div class="architecture-grid">
+            <article class="architecture-card architecture-current">
+              <div class="architecture-card-top"><span class="architecture-number">A</span><span class="status-pill status-implemented"><span class="status-led" aria-hidden="true"></span><span class="lang-es">Actual · implementado</span><span class="lang-en">Current · implemented</span></span></div>
+              <h3><span class="lang-es">Windows + Docker Desktop / WSL2</span><span class="lang-en">Windows + Docker Desktop / WSL2</span></h3>
+              <p class="lang-es">Node Exporter observa el Linux del Engine. Prometheus scrapea Node Exporter y sus reglas; Grafana consume Prometheus; Alertmanager reenvía incidentes al logger interno.</p>
+              <p class="lang-en">Node Exporter observes Engine Linux. Prometheus scrapes Node Exporter and evaluates rules; Grafana reads Prometheus; Alertmanager sends incidents to the internal logger.</p>
+              <div class="architecture-flow" aria-label="Current local metrics and alert flow">
+                <div class="flow-row"><span class="flow-node">Node Exporter</span><span class="flow-arrow" aria-hidden="true">→</span><span class="flow-node flow-node-prom">Prometheus</span><span class="flow-arrow" aria-hidden="true">→</span><span class="flow-node flow-node-graf">Grafana</span></div>
+                <div class="flow-row flow-secondary"><span class="flow-node">Prometheus rules</span><span class="flow-arrow" aria-hidden="true">→</span><span class="flow-node flow-node-alert">Alertmanager</span><span class="flow-arrow" aria-hidden="true">→</span><span class="flow-node">Incident Logger</span></div>
+                <div class="flow-row flow-exporter"><span class="flow-node">Windows Docker CLI</span><span class="flow-arrow" aria-hidden="true">→</span><span class="flow-node">Python exporter</span><span class="flow-connection"><span>host.docker.internal</span><span aria-hidden="true">→</span></span><span class="flow-node flow-node-prom">Prometheus</span></div>
+              </div>
+              <p class="architecture-foot"><span class="footnote-mark" aria-hidden="true">!</span><span class="lang-es">Ningún contenedor monta el socket Docker. El exporter en Windows conserva acceso significativo al daemon.</span><span class="lang-en">No container mounts the Docker socket. The Windows exporter retains significant daemon access.</span></p>
+            </article>
+            <article class="architecture-card architecture-planned">
+              <div class="architecture-card-top"><span class="architecture-number">B</span><span class="status-pill status-planned"><span class="status-led" aria-hidden="true"></span><span class="lang-es">Propuesto · no desplegado</span><span class="lang-en">Proposed · not deployed</span></span></div>
+              <h3><span class="lang-es">OCI ARM64 + Cloudflare Pages</span><span class="lang-en">OCI ARM64 + Cloudflare Pages</span></h3>
+              <p class="lang-es">El portal estático vive por separado del laboratorio. En OCI, un reverse proxy sería la única entrada web; los servicios de métricas quedarían en redes privadas.</p>
+              <p class="lang-en">The static portfolio is separate from the lab. On OCI, a reverse proxy would be the only web ingress; monitoring services stay on private networks.</p>
+              <div class="architecture-flow planned-flow" aria-label="Proposed cloud architecture">
+                <div class="flow-row"><span class="flow-node flow-node-cloud">Cloudflare Pages</span><span class="flow-note"><span class="lang-es">portal estático</span><span class="lang-en">static portfolio</span></span></div>
+                <div class="planned-separator"><span>INDEPENDENT</span></div>
+                <div class="flow-row"><span class="flow-node flow-node-cloud">HTTPS :443</span><span class="flow-arrow" aria-hidden="true">→</span><span class="flow-node">Reverse proxy</span><span class="flow-arrow" aria-hidden="true">→</span><span class="flow-node flow-node-graf">Grafana</span></div>
+                <div class="flow-row flow-secondary"><span class="flow-node flow-node-prom">Prometheus</span><span class="flow-note"><span class="lang-es">scrape privado</span><span class="lang-en">private scrape</span></span><span class="flow-node">Node Exporter</span><span class="flow-arrow" aria-hidden="true">→</span><span class="flow-node flow-node-alert">Alertmanager</span></div>
+              </div>
+              <p class="architecture-foot"><span class="footnote-mark" aria-hidden="true">!</span><span class="lang-es">El exporter Linux por contenedor queda fuera de la línea base hasta aprobar un límite de permisos seguro.</span><span class="lang-en">Per-container Linux exporter stays out of the baseline until a safe privilege boundary is approved.</span></p>
+            </article>
+          </div>
+          <a class="text-link" href={`${repositoryDocs}/cloud/architecture.md`} target="_blank" rel="noreferrer noopener"><span class="lang-es">Leer arquitectura propuesta y diagramas Mermaid</span><span class="lang-en">Read the proposed architecture and Mermaid diagrams</span><span aria-hidden="true">↗</span></a>
+        </div>
+      </section>
+
+      <section class="section section-border" id="incidents" aria-labelledby="incidents-title">
+        <div class="container">
+          <div class="section-heading"><div><p class="section-index">04 / INCIDENT LIFECYCLE</p><h2 id="incidents-title"><span class="lang-es">Del síntoma a la recuperación</span><span class="lang-en">From signal to recovery</span></h2></div><p class="section-intro lang-es">La simulación controlada verifica el flujo de reglas y notificaciones, sin presentar tiempos como un SLO de producción.</p><p class="section-intro lang-en">Controlled simulations validate alert and notification flow without presenting timings as a production SLO.</p></div>
+          <ol class="incident-lifecycle">
+            <li><span class="lifecycle-index">01</span><strong>NORMAL</strong><p class="lang-es">Métricas dentro de umbral</p><p class="lang-en">Metrics within thresholds</p></li>
+            <li><span class="lifecycle-index">02</span><strong>PENDING</strong><p class="lang-es">Condición sostenida</p><p class="lang-en">Condition sustained</p></li>
+            <li><span class="lifecycle-index">03</span><strong>FIRING</strong><p class="lang-es">Regla activa</p><p class="lang-en">Rule is active</p></li>
+            <li><span class="lifecycle-index">04</span><strong>NOTIFICATION</strong><p class="lang-es">Alertmanager → logger</p><p class="lang-en">Alertmanager → logger</p></li>
+            <li><span class="lifecycle-index">05</span><strong>RESOLVED</strong><p class="lang-es">Recuperación registrada</p><p class="lang-en">Recovery recorded</p></li>
+          </ol>
+          <div class="incident-note"><span class="status-led" aria-hidden="true"></span><p class="lang-es"><strong>TestIncident permanece inactiva por defecto.</strong> Las capturas muestran un laboratorio en estado normal y sin grupos de alertas activos.</p><p class="lang-en"><strong>TestIncident stays inactive by default.</strong> The screenshots show the lab in a normal state with no active alert groups.</p></div>
+        </div>
+      </section>
+
+      <section class="section section-border" id="delivery" aria-labelledby="delivery-title">
+        <div class="container">
+          <div class="section-heading"><div><p class="section-index">05 / CI &amp; DELIVERY</p><h2 id="delivery-title"><span class="lang-es">Validaciones en GitHub Actions</span><span class="lang-en">GitHub Actions validation</span></h2></div><p class="section-intro lang-es">Ejecución remota consultada para el commit de `main` que etiqueta v1.0.0. No valida esta rama local todavía.</p><p class="section-intro lang-en">Remote run checked for the `main` commit tagged v1.0.0. It does not validate this local branch yet.</p></div>
+          <div class="ci-banner"><div class="ci-banner-icon" aria-hidden="true">✓</div><div><span class="ci-banner-label"><span class="lang-es">EJECUCIÓN REAL VERIFICADA · MAIN</span><span class="lang-en">REAL RUN VERIFIED · MAIN</span></span><strong>3e847f5 · 24 Oct 2026</strong><p class="lang-es">Los cuatro jobs finalizaron con éxito en GitHub Actions.</p><p class="lang-en">All four jobs completed successfully in GitHub Actions.</p></div><a class="button button-outline" href={ciRun} target="_blank" rel="noreferrer noopener"><span class="lang-es">Ver ejecución</span><span class="lang-en">View run</span><span aria-hidden="true">↗</span></a></div>
+          <div class="job-grid">
+            {jobs.map((job, index) => (
+              <article class="job-card"><span class="job-check" aria-hidden="true">✓</span><span class="job-index">0{index + 1}</span><h3>{job.name}</h3><p class="lang-es">{job.detailEs}</p><p class="lang-en">{job.detailEn}</p><span class="job-status"><span class="status-led" aria-hidden="true"></span>SUCCESS · MAIN</span></article>
+            ))}
+          </div>
+          <p class="ci-footnote"><span class="lang-es">La evidencia visual de la galería es la ejecución #4; el enlace lleva a la ejecución #40116633928 para el commit estable actual. No se habilita CD.</span><span class="lang-en">The gallery image is from run #4; the link opens run #40116633928 for the current stable commit. No CD is enabled.</span></p>
+        </div>
+      </section>
+
+      <section class="section section-border" id="security" aria-labelledby="security-title">
+        <div class="container">
+          <div class="section-heading"><div><p class="section-index">06 / SECURITY BY DESIGN</p><h2 id="security-title"><span class="lang-es">Los límites también son arquitectura</span><span class="lang-en">Security boundaries are architecture</span></h2></div><p class="section-intro lang-es">El laboratorio está aislado para aprendizaje. Una ruta de observación no debe convertirse en una API de administración expuesta.</p><p class="section-intro lang-en">The lab is isolated for learning. An observation path must not become an exposed administration API.</p></div>
+          <div class="security-grid">
+            <article class="security-card"><span class="security-symbol">01</span><h3><span class="lang-es">Sin socket en contenedores</span><span class="lang-en">No socket in containers</span></h3><p class="lang-es">Ningún servicio recibe `/var/run/docker.sock`. El exporter host-side usa Docker CLI, pero su usuario mantiene facultades importantes sobre el daemon.</p><p class="lang-en">No service receives `/var/run/docker.sock`. The host-side exporter uses Docker CLI, while its user retains significant daemon privileges.</p></article>
+            <article class="security-card"><span class="security-symbol">02</span><h3><span class="lang-es">Redes y alcance privados</span><span class="lang-en">Private network scope</span></h3><p class="lang-es">Prometheus, Alertmanager, exporters y webhook no son servicios públicos. La red local de Docker Desktop no equivale a un firewall de aplicación.</p><p class="lang-en">Prometheus, Alertmanager, exporters, and webhook are not public services. Docker Desktop networking is not an application firewall.</p></article>
+            <article class="security-card"><span class="security-symbol">03</span><h3><span class="lang-es">Secretos fuera del repositorio</span><span class="lang-en">Secrets stay out of Git</span></h3><p class="lang-es">`.env` y `data/` se excluyen de Git. El portal no usa credenciales, variables secretas, base de datos ni API privada.</p><p class="lang-en">`.env` and `data/` are excluded from Git. The portfolio has no credentials, secret variables, database, or private API.</p></article>
+            <article class="security-card"><span class="security-symbol">04</span><h3><span class="lang-es">Telemetría no es SLO</span><span class="lang-en">Telemetry is not an SLO</span></h3><p class="lang-es">Las capturas son evidencias fechadas. `host.docker.internal` facilita una ruta desde Docker Desktop, pero no autentica al cliente Prometheus.</p><p class="lang-en">Screenshots are dated evidence. `host.docker.internal` provides a Docker Desktop route but does not authenticate the Prometheus client.</p></article>
+          </div>
+          <a class="text-link" href={`${repositoryDocs}/cloud/security-model.md`} target="_blank" rel="noreferrer noopener"><span class="lang-es">Ver modelo de seguridad para OCI y el portal</span><span class="lang-en">Read the OCI and portfolio security model</span><span aria-hidden="true">↗</span></a>
+        </div>
+      </section>
+
+      <section class="section section-border" id="roadmap" aria-labelledby="roadmap-title">
+        <div class="container roadmap-section">
+          <div class="section-heading"><div><p class="section-index">07 / ROADMAP</p><h2 id="roadmap-title"><span class="lang-es">Progreso con evidencia</span><span class="lang-en">Evidence-led progress</span></h2></div><p class="section-intro lang-es">La fase cloud se prepara en esta rama local. La etiqueta “planned” describe el despliegue, no una infraestructura online.</p><p class="section-intro lang-en">Cloud work is being prepared on this local branch. “Planned” describes deployment status, not online infrastructure.</p></div>
+          <div class="roadmap-grid">
+            <div class="roadmap-item"><span class="roadmap-check" aria-hidden="true">✓</span><div><strong>Fase 1–2</strong><span class="lang-es">Prometheus, Grafana, alertas y registro de incidentes</span><span class="lang-en">Prometheus, Grafana, alerts, and incident logging</span></div><span class="status-pill status-implemented"><span class="lang-es">Completa</span><span class="lang-en">Complete</span></span></div>
+            <div class="roadmap-item"><span class="roadmap-check" aria-hidden="true">✓</span><div><strong>Fase 3B</strong><span class="lang-es">Exporter local host-side, sin socket dentro de contenedores</span><span class="lang-en">Local host-side exporter, no container socket mount</span></div><span class="status-pill status-implemented"><span class="lang-es">Completa</span><span class="lang-en">Complete</span></span></div>
+            <div class="roadmap-item"><span class="roadmap-check" aria-hidden="true">✓</span><div><strong>Fase 4</strong><span class="lang-es">CI para pruebas Python y validación de configuraciones</span><span class="lang-en">CI for Python tests and configuration validation</span></div><span class="status-pill status-implemented"><span class="lang-es">Completa</span><span class="lang-en">Complete</span></span></div>
+            <div class="roadmap-item roadmap-item-planned"><span class="roadmap-next" aria-hidden="true">→</span><div><strong>Fase 5</strong><span class="lang-es">Portal estático y plan ARM64; sin despliegue ni cuentas cloud</span><span class="lang-en">Static portfolio and ARM64 plan; no deployment or cloud accounts</span></div><span class="status-pill status-planned"><span class="lang-es">Planned</span><span class="lang-en">Planned</span></span></div>
+          </div>
+          <div class="roadmap-links"><a class="button button-primary" href={`${repositoryDocs}/cloud/cloudflare-pages-plan.md`} target="_blank" rel="noreferrer noopener"><span class="lang-es">Plan Cloudflare Pages</span><span class="lang-en">Cloudflare Pages plan</span><span aria-hidden="true">↗</span></a><a class="button button-outline" href={`${repositoryDocs}/cloud/oracle-arm64-deployment-plan.md`} target="_blank" rel="noreferrer noopener"><span class="lang-es">Plan Oracle ARM64</span><span class="lang-en">Oracle ARM64 plan</span><span aria-hidden="true">↗</span></a></div>
+        </div>
+      </section>
+
+      <section class="section section-border" id="docs" aria-labelledby="docs-title">
+        <div class="container docs-strip"><div><p class="section-index">DOCUMENTATION</p><h2 id="docs-title"><span class="lang-es">Continúa la lectura</span><span class="lang-en">Continue reading</span></h2></div><nav class="docs-links" aria-label="Project documentation">{docs.map((doc) => <a href={doc.href} target="_blank" rel="noreferrer noopener"><span class="lang-es">{doc.labelEs}</span><span class="lang-en">{doc.labelEn}</span><span aria-hidden="true">↗</span></a>)}</nav></div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-main"><a class="brand footer-brand" href="#top" aria-label="Back to top"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span><span class="brand-copy"><strong>ITMC</strong><small>MONITORING CENTER</small></span></a><p class="footer-statement lang-es">Laboratorio educativo y portafolio DevOps/SRE.<br />Evidencia local, arquitectura cloud propuesta.</p><p class="footer-statement lang-en">Educational DevOps/SRE lab and portfolio.<br />Local evidence, proposed cloud architecture.</p><div class="footer-links"><a href={repository} target="_blank" rel="noreferrer noopener">GitHub ↗</a><a href={release} target="_blank" rel="noreferrer noopener">v1.0.0 ↗</a><a href={`${repository}/blob/main/LICENSE`} target="_blank" rel="noreferrer noopener">MIT License ↗</a></div></div>
+      <div class="container footer-bottom"><span>© 2026 IT Infrastructure Monitoring Center</span><span class="footer-status"><span class="status-led" aria-hidden="true"></span><span class="lang-es">Cloud deployment · Planned</span><span class="lang-en">Cloud deployment · Planned</span></span></div>
+    </footer>
+
+    <dialog class="image-dialog" id="image-viewer" aria-label="Visor de capturas">
+      <div class="dialog-toolbar"><p id="viewer-caption" class="dialog-caption"></p><button class="dialog-close" type="button" data-close-image data-aria-es="Cerrar visor de capturas" data-aria-en="Close screenshot viewer" aria-label="Cerrar visor de capturas">×</button></div>
+      <img id="viewer-image" src="" alt="" />
+    </dialog>
+
+    <script>
+      import "../scripts/site.js";
+    </script>
+  </body>
+</html>

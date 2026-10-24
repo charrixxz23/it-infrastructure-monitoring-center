@@ -1,0 +1,25 @@
+---
+import "../styles/site.css";
+---
+
+<!doctype html>
+<html lang="es" data-locale="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Page not found · ITMC</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="not-found-body">
+    <main class="not-found-main">
+      <p class="section-index">404 / NOT FOUND</p>
+      <h1>La página no existe.<br /><span>This page does not exist.</span></h1>
+      <a class="button button-primary" href="/"><span class="lang-es">Volver al inicio</span><span class="lang-en">Back to home</span><span aria-hidden="true">→</span></a>
+      <div class="locale-switch" role="group" aria-label="Language"><button type="button" data-locale-button="es" aria-pressed="true">ES</button><button type="button" data-locale-button="en" aria-pressed="false">EN</button></div>
+    </main>
+    <script>
+      import "../scripts/site.js";
+    </script>
+  </body>
+</html>

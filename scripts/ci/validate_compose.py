@@ -12,6 +12,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 IGNORED_NAMES = {
     ".git",
+    "node_modules",
+    "dist",
+    ".astro",
+    "coverage",
     ".venv",
     "venv",
     "__pycache__",
