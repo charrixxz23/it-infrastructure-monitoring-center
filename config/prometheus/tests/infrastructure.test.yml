@@ -1,0 +1,114 @@
+rule_files:
+  - ../rules/infrastructure.yml
+  - ../test-rules/incident-test.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: target-down-fires-only-after-one-minute
+    interval: 1m
+    input_series:
+      - series: 'up{job="node-exporter", instance="node-a:9100"}'
+        values: '0+0x3'
+      - series: 'up{job="prometheus", instance="prometheus:9090"}'
+        values: '1+0x3'
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: TargetDown
+        exp_alerts: []
+      - eval_time: 1m
+        alertname: TargetDown
+        exp_alerts:
+          - exp_labels:
+              alertname: TargetDown
+              instance: node-a:9100
+              job: node-exporter
+              severity: critical
+            exp_annotations:
+              summary: "A configured Prometheus scrape target is down"
+              description: "A configured Prometheus or Node Exporter target has remained unreachable for at least one minute."
+
+  - name: high-cpu-respects-five-minute-for
+    interval: 1m
+    input_series:
+      - series: 'node_cpu_seconds_total{job="node-exporter", instance="node-a:9100", cpu="0", mode="idle"}'
+        values: '0+6x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HighCPUUsage
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: HighCPUUsage
+        exp_alerts:
+          - exp_labels:
+              alertname: HighCPUUsage
+              instance: node-a:9100
+              severity: warning
+            exp_annotations:
+              summary: "Linux Engine CPU usage is above 85%"
+              description: "CPU usage on the Linux environment visible to Docker has remained above 85% for five minutes."
+
+  - name: memory-threshold-and-duration
+    interval: 1m
+    input_series:
+      - series: 'node_memory_MemAvailable_bytes{job="node-exporter", instance="node-a:9100"}'
+        values: '4+0x12'
+      - series: 'node_memory_MemTotal_bytes{job="node-exporter", instance="node-a:9100"}'
+        values: '100+0x12'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: HighMemoryUsage
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: HighMemoryUsage
+        exp_alerts:
+          - exp_labels:
+              alertname: HighMemoryUsage
+              instance: node-a:9100
+              job: node-exporter
+              severity: warning
+            exp_annotations:
+              summary: "Linux Engine memory utilization is above 90%"
+              description: "Memory utilization on the Linux environment visible to Docker has remained above 90% for five minutes."
+
+  - name: memory-below-threshold-does-not-fire
+    interval: 1m
+    input_series:
+      - series: 'node_memory_MemAvailable_bytes{job="node-exporter", instance="node-a:9100"}'
+        values: '20+0x12'
+      - series: 'node_memory_MemTotal_bytes{job="node-exporter", instance="node-a:9100"}'
+        values: '100+0x12'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HighMemoryUsage
+        exp_alerts: []
+
+  - name: disk-threshold-and-duration
+    interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{job="node-exporter", instance="node-a:9100", device="C:\\134", fstype="9p", mountpoint="/mnt/host/c"}'
+        values: '5+0x12'
+      - series: 'node_filesystem_size_bytes{job="node-exporter", instance="node-a:9100", device="C:\\134", fstype="9p", mountpoint="/mnt/host/c"}'
+        values: '100+0x12'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: DiskSpaceCritical
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: DiskSpaceCritical
+        exp_alerts:
+          - exp_labels:
+              alertname: DiskSpaceCritical
+              instance: node-a:9100
+              mountpoint: /mnt/host/c
+              severity: critical
+            exp_annotations:
+              summary: "Windows C: filesystem usage is above 90%"
+              description: "The /mnt/host/c volume (Windows C: as exposed to Docker Desktop) has remained above 90% usage for five minutes."
+
+  - name: disabled-test-incident-does-not-fire
+    interval: 1m
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: TestIncident
+        exp_alerts: []

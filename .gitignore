@@ -1,0 +1,19 @@
+# Local Grafana credentials
+.env
+.env.*
+!.env.example
+
+# Runtime data and local exports
+data/
+*.db
+*.wal
+*.log
+*.out
+__pycache__/
+*.py[cod]
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

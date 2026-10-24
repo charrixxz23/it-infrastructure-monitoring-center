@@ -1,0 +1,15 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: incident-logger
+  group_by: [alertname, instance, mountpoint, source]
+  group_wait: 3s
+  group_interval: 5s
+  repeat_interval: 4h
+
+receivers:
+  - name: incident-logger
+    webhook_configs:
+      - url: http://incident-logger:8080/webhook
+        send_resolved: true

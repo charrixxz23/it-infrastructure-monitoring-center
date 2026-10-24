@@ -1,0 +1,39 @@
+groups:
+  - name: infrastructure
+    interval: 15s
+    rules:
+      - alert: TargetDown
+        expr: up{job=~"prometheus|node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "A configured Prometheus scrape target is down"
+          description: "A configured Prometheus or Node Exporter target has remained unreachable for at least one minute."
+
+      - alert: HighCPUUsage
+        expr: 100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{job="node-exporter", mode="idle"}[5m]))) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Linux Engine CPU usage is above 85%"
+          description: "CPU usage on the Linux environment visible to Docker has remained above 85% for five minutes."
+
+      - alert: HighMemoryUsage
+        expr: 100 * (1 - node_memory_MemAvailable_bytes{job="node-exporter"} / node_memory_MemTotal_bytes{job="node-exporter"}) > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Linux Engine memory utilization is above 90%"
+          description: "Memory utilization on the Linux environment visible to Docker has remained above 90% for five minutes."
+
+      - alert: DiskSpaceCritical
+        expr: max by (instance, mountpoint) (100 * (1 - node_filesystem_avail_bytes{job="node-exporter", mountpoint="/mnt/host/c", device!~"/dev/loop.*", fstype!~"tmpfs|overlay|squashfs|proc|sysfs|cgroup.*|nsfs|devtmpfs|autofs"} / node_filesystem_size_bytes{job="node-exporter", mountpoint="/mnt/host/c", device!~"/dev/loop.*", fstype!~"tmpfs|overlay|squashfs|proc|sysfs|cgroup.*|nsfs|devtmpfs|autofs"})) > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Windows C: filesystem usage is above 90%"
+          description: "The /mnt/host/c volume (Windows C: as exposed to Docker Desktop) has remained above 90% usage for five minutes."

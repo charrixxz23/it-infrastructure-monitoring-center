@@ -1,0 +1,13 @@
+groups:
+  - name: controlled-test
+    interval: 15s
+    rules:
+      - alert: TestIncident
+        expr: vector(0) == 1
+        for: 15s
+        labels:
+          severity: info
+          source: automated-test
+        annotations:
+          summary: "Controlled incident lifecycle test"
+          description: "This alert is disabled during normal operation and is toggled only by scripts/simulate-incident.*."
