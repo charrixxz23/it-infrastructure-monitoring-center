@@ -179,7 +179,7 @@ jobs:
           {
             echo '## Configuration validation scope'
             echo '- Dashboard JSON structure and expected panel inventories'
-            echo '- Docker Compose rendering with a disposable non-sensitive `.env`; no containers are started'
+            echo "- Docker Compose rendering with a disposable non-sensitive \`.env\`; no containers are started"
             echo '- Prometheus config, rules, and rule tests using the project-pinned promtool version'
             echo '- Alertmanager config using the project-pinned amtool version'
             echo '- GitHub Actions workflow syntax and semantics'
