@@ -208,3 +208,15 @@ Con Docker Desktop activo, scripts/validate.ps1 comprueba el entorno local, las 
 - [Integración continua](docs/ci.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Resultados de validación resumidos](docs/verification-results.md)
+
+## Fase 5 — Preparación cloud (Planned / In Development)
+
+**ES:** La rama `feature/free-cloud-deployment` prepara localmente un portal estático para Cloudflare Pages y documenta una posible migración ARM64 a OCI Always Free. No se han creado cuentas ni recursos cloud, configurado DNS o desplegado servicios. El laboratorio existente no cambia.
+
+**EN:** The `feature/free-cloud-deployment` branch locally prepares a static Cloudflare Pages portfolio and documents a possible ARM64 migration to OCI Always Free. No cloud accounts or resources have been created, no DNS has been configured, and no services have been deployed. The existing lab remains unchanged.
+
+- [Portal estático](website/)
+- [Arquitectura y diagramas cloud](docs/cloud/architecture.md) · [diagramas Mermaid](docs/cloud/diagrams.md)
+- [Plan Oracle ARM64](docs/cloud/oracle-arm64-deployment-plan.md) · [estimación de cuotas y costos](docs/cloud/cost-assessment.md)
+- [Plan Cloudflare Pages](docs/cloud/cloudflare-pages-plan.md)
+- [Modelo de seguridad](docs/cloud/security-model.md) · [validación y criterios](docs/cloud/testing-plan.md)
