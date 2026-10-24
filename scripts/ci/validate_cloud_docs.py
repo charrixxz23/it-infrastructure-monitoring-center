@@ -12,7 +12,9 @@ from urllib.parse import unquote, urlsplit
 ROOT = Path(__file__).resolve().parents[2]
 MARKDOWN_FILES = [ROOT / "README.md", *sorted((ROOT / "docs" / "cloud").glob("*.md"))]
 LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)\s]+)(?:\s+[^)]*)?\)")
-FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})([^\r\n]*)\r?\n([\s\S]*?)^\s*\1\s*$", re.MULTILINE)
+FENCE_RE = re.compile(
+    r"^\s*(`{3,}|~{3,})([^\r\n]*)\r?\n([\s\S]*?)^\s*\1\s*$", re.MULTILINE
+)
 MERMAID_START = re.compile(
     r"^(?:flowchart|graph|sequenceDiagram|stateDiagram(?:-v2)?|classDiagram|"
     r"erDiagram|journey|gantt|pie|mindmap|timeline|gitGraph)\b",
@@ -42,7 +44,11 @@ def validate_links() -> list[str]:
             if parsed.scheme or raw.startswith("//"):
                 continue
             target_path = unquote(parsed.path)
-            resolved = (source.parent / target_path).resolve() if target_path else source.resolve()
+            resolved = (
+                (source.parent / target_path).resolve()
+                if target_path
+                else source.resolve()
+            )
             if resolved.is_dir() and not parsed.fragment:
                 continue
             if resolved.is_dir():
@@ -53,7 +59,9 @@ def validate_links() -> list[str]:
             if parsed.fragment and resolved.suffix.lower() == ".md":
                 target_text = resolved.read_text(encoding="utf-8")
                 if parsed.fragment not in heading_anchors(target_text):
-                    errors.append(f"{source.relative_to(ROOT)}: missing heading #{parsed.fragment} in {raw}")
+                    errors.append(
+                        f"{source.relative_to(ROOT)}: missing heading #{parsed.fragment} in {raw}"
+                    )
     return errors
 
 
@@ -99,7 +107,9 @@ def validate_mermaid() -> list[str]:
             block_count += 1
             diagram = fence.group(3).strip()
             if not diagram or not MERMAID_START.match(diagram.splitlines()[0].strip()):
-                errors.append(f"{source.relative_to(ROOT)}: invalid or empty Mermaid diagram block")
+                errors.append(
+                    f"{source.relative_to(ROOT)}: invalid or empty Mermaid diagram block"
+                )
                 continue
             issue = balanced_mermaid(source, diagram)
             if issue:
@@ -119,7 +129,9 @@ def main() -> int:
         for error in errors:
             print(f"- {error}")
         return 1
-    print(f"Cloud documentation validation passed: {len(MARKDOWN_FILES)} Markdown files; local links and Mermaid blocks checked.")
+    print(
+        f"Cloud documentation validation passed: {len(MARKDOWN_FILES)} Markdown files; local links and Mermaid blocks checked."
+    )
     return 0
 
 
