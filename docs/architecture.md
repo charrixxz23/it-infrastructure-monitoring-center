@@ -37,6 +37,8 @@ flowchart LR
 
 Prometheus obtiene métricas del propio servicio y de Node Exporter, evalúa las reglas de `config/prometheus/rules/` y envía alertas a `alertmanager:9093`. Alertmanager remite todas las notificaciones FIRING y RESOLVED al logger HTTP interno. Grafana usa `http://prometheus-internal:9090` dentro de la red Docker. Solo Grafana, Prometheus y la interfaz web de Alertmanager publican puertos, enlazados a loopback. Para que Docker Desktop pueda hacer esos reenvíos, se conectan a la red bridge local no marcada `internal`; la conexión de Grafana al datasource usa el alias `prometheus-internal` de la red de scraping. Esa red adicional permite salida de red a esos tres servicios. Node Exporter y el logger no se conectan a ella.
 
+La vista completa de arquitectura y los diagramas Mermaid separados de [flujo de métricas, incidentes y CI](diagrams.md) resumen las rutas y el alcance de cada proceso.
+
 `incident-logger` escucha en el puerto 8080 únicamente en `itmc-monitoring`; no tiene mapeo de puertos al host. Su API acepta POST de Alertmanager en `/webhook` y responde a su healthcheck. El logger guarda JSONL persistente con rotación limitada (5 MiB por archivo, cuatro archivos como máximo) y elimina duplicados de notificación con una clave SHA-256 derivada de fingerprint, estado y `startsAt`. Alertmanager conserva su estado durante 120 horas en su propio volumen.
 
 El exporter Python es un proceso local de Windows, fuera de Compose. Prometheus lo scrapea por `host.docker.internal:9464`; el servidor del proceso solo se enlaza a `127.0.0.1`. Se comprobó que Docker Desktop proxifica la conexión de Prometheus hacia un listener loopback y que Windows recibe el peer como `127.0.0.1`; no se abrió un listener LAN ni se alteró firewall. El exporter ejecuta únicamente `docker ps` con el filtro de etiqueta del proyecto y `docker stats --no-stream` para los IDs resultantes. No se monta socket Docker en contenedores.
@@ -56,7 +58,7 @@ Las cuatro alertas de producción vigilan targets configurados, CPU >85 %, memor
 
 Node Exporter monta /proc, /sys y / del host Linux del daemon en modo lectura y configura las rutas de colectores. No se activa PID host porque las métricas mostradas no requieren enumerar procesos.
 
-En esta ejecución node_uname_info informó Linux, kernel 6.18.54.1-microsoft-standard-WSL2 y x86_64. El filesystem /mnt/host/c apareció como 9p y su espacio libre coincidió con el volumen C: de Windows al momento de comprobarlo. CPU, memoria, interfaces y uptime representan el Linux WSL2 del Docker Engine; no son métricas de CPU/memoria de Windows ni de la distro Ubuntu.
+En Docker Desktop/WSL2, node_uname_info identifica Linux/WSL2. El filesystem /mnt/host/c puede aparecer como 9p y reflejar el espacio disponible del volumen C: compartido. CPU, memoria, interfaces y uptime representan el Linux del Docker Engine; no son métricas de CPU/memoria de Windows ni de una distro Ubuntu separada.
 
 Los montajes de raíz de Node Exporter permiten leer detalles del filesystem y son sensibles aunque sean de solo lectura. No se monta socket Docker dentro de contenedores. El proceso host del exporter sí hereda el acceso del usuario a Docker Desktop; aunque el código use únicamente operaciones de lectura, ese usuario conserva facultad significativa sobre el daemon. Usa este proceso solo con código confiable.
 

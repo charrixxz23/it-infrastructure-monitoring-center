@@ -1,234 +1,210 @@
 # IT Infrastructure Monitoring Center
 
-Centro local de monitoreo con Prometheus, Grafana, Node Exporter y Alertmanager. Reúne métricas Linux en un dashboard provisionado automáticamente, evalúa alertas y conserva un historial local de incidentes. Incluye un exporter Python opcional en Windows que consulta Docker CLI con el filtro de proyecto y escucha solo en loopback.
+[![CI](https://github.com/charrixxz23/it-infrastructure-monitoring-center/actions/workflows/ci.yml/badge.svg)](https://github.com/charrixxz23/it-infrastructure-monitoring-center/actions/workflows/ci.yml)
+[![Prometheus](https://img.shields.io/badge/Prometheus-3.15.0-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/)
+[![Grafana](https://img.shields.io/badge/Grafana-13.2.4-F46800?logo=grafana&logoColor=white)](https://grafana.com/)
+[![Node Exporter](https://img.shields.io/badge/Node_Exporter-1.12.1-3399CC?logo=prometheus&logoColor=white)](https://github.com/prometheus/node_exporter)
+[![Alertmanager](https://img.shields.io/badge/Alertmanager-0.34.1-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/docs/alerting/latest/alertmanager/)
+[![Docker Compose](https://img.shields.io/badge/Docker_Compose-v2%2B-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 
-> English: A reproducible local infrastructure monitoring lab built with Prometheus, Grafana, Node Exporter, Alertmanager, and Docker Compose. It provisions a dashboard, evaluates alerts, records local incidents, and persists state.
+**ES —** Laboratorio local de observabilidad para una infraestructura Docker: métricas de host con Prometheus y Node Exporter, visualización en Grafana, reglas de alertas y registro de incidentes. Incluye un exporter Python opcional, ejecutado en Windows, para observar estadísticas de los contenedores del proyecto.
 
-## Problema que resuelve
+**EN —** A reproducible local observability lab for a Docker-based infrastructure: host metrics with Prometheus and Node Exporter, Grafana dashboards, alert rules, and an incident log. An optional Windows-hosted Python exporter collects statistics for this Compose project’s containers.
 
-Sin observabilidad resulta difícil identificar saturación de CPU, memoria, disco o red y demostrar la salud de los servicios. Esta fase centraliza métricas reales y ofrece un panel inicial listo para usar. Está pensada para desarrollo local y portafolio, no para producción.
+> Proyecto educativo y de portafolio. No incluye despliegue cloud ni pretende ser una configuración de producción.
 
-## Arquitectura
+## Navegación
 
-~~~mermaid
-flowchart LR
-    ne["Node Exporter :9100"]
-    prom["Prometheus :9090"]
-    graf["Grafana :3000"]
-    am["Alertmanager :9093"]
-    logger["Incident Logger :8080"]
-    scrape["Red interna itmc-monitoring"]
-    edge["Red local-access"]
-    browser["Navegador local"]
-    exp["Exporter Python en Windows\n127.0.0.1:9464"]
-    engine["Docker CLI → Docker Desktop"]
-    prom -->|"scrape 15 s"| ne
-    prom -->|"autocolección"| prom
-    prom -->|"scrape 15 s vía host.docker.internal"| exp
-    exp -->|"docker ps + stats --no-stream"| engine
-    graf -->|"prometheus-internal:9090"| prom
-    prom -->|"alertas"| am
-    am -->|"webhook FIRING / RESOLVED"| logger
-    ne -.-> scrape
-    prom -.-> scrape
-    graf -.-> scrape
-    prom -.-> edge
-    graf -.-> edge
-    browser -->|"127.0.0.1:3000"| graf
-    browser -->|"127.0.0.1:9090"| prom
-    browser -->|"127.0.0.1:9093"| am
-    prom --- pv[("itmc-prometheus-data")]
-    graf --- gv[("itmc-grafana-data")]
-    am --- av[("itmc-alertmanager-data")]
-    logger --- lv[("itmc-incident-log-data")]
+- [Funcionalidades](#funcionalidades)
+- [Arquitectura y diagramas](#arquitectura-y-diagramas)
+- [Dashboards](#dashboards)
+- [Monitoreo y alertas](#monitoreo-y-alertas)
+- [Evidencias](#evidencias)
+- [GitHub Actions](#github-actions)
+- [Requisitos e inicio rápido](#requisitos-e-inicio-rápido)
+- [Pruebas](#pruebas)
+- [Decisiones y límites de seguridad](#decisiones-y-límites-de-seguridad)
+- [Documentación](#documentación)
+
+## Funcionalidades
+
+- Cinco servicios Compose: Prometheus, Grafana, Node Exporter, Alertmanager e Incident Logger.
+- Aprovisionamiento de datasource y dashboards Grafana desde archivos versionados.
+- Métricas de CPU, memoria, filesystem, red, uptime y disponibilidad de targets.
+- Reglas de alerta y registro persistente, rotado y local de eventos FIRING/RESOLVED.
+- Exporter opcional Python para CPU, memoria y red por contenedor del proyecto Compose.
+- Pruebas unitarias y validaciones estáticas/configuración en GitHub Actions.
+
+## Stack
+
+| Componente | Versión configurada | Propósito |
+|---|---:|---|
+| Prometheus | 3.15.0 | Scraping, TSDB y evaluación de reglas |
+| Grafana | 13.2.4 | Dashboards provisionados |
+| Node Exporter | 1.12.1 | Métricas del Linux visible al daemon |
+| Alertmanager | 0.34.1 | Agrupación y entrega de alertas |
+| Incident Logger | Python 3.13, biblioteca estándar | Webhook e historial local rotado |
+| Container Exporter | Python 3.10+, biblioteca estándar | Snapshot opcional de estadísticas Docker |
+
+## Arquitectura y diagramas
+
+Los diagramas de [arquitectura](docs/architecture.md) y de [flujo de métricas, incidentes y CI](docs/diagrams.md) están escritos en Mermaid para renderizarse en GitHub.
+
+El exporter de contenedores corre como proceso local de Windows, fuera de Docker. Prometheus lo consulta a través de host.docker.internal; no se monta el socket Docker en ningún contenedor.
+
+## Dashboards
+
+| Dashboard | Paneles | Fuente | Disponibilidad |
+|---|---:|---|---|
+| **IT Infrastructure Overview** | 14 | Prometheus / Node Exporter | Provisionado automáticamente |
+| **Docker Container Monitoring** | 12 | Prometheus / exporter Python | Provisionado automáticamente; los datos recientes requieren iniciar el exporter manualmente |
+
+El dashboard de infraestructura presenta KPIs, tendencias, salud de targets y capacidad de los volúmenes relevantes. Las métricas de CPU, memoria, red y uptime de Node Exporter describen el **Linux del motor Docker Desktop/WSL2**, no el Windows físico. Sus etiquetas distinguen el volumen compartido **Windows C:** (/mnt/host/c) del **Docker virtual disk** (/mnt/docker-desktop-disk).
+
+Los dos dashboards se leen desde config/grafana/dashboards/ mediante el proveedor de archivos en config/grafana/provisioning/dashboards/dashboard-provider.yml. Grafana los vuelve a cargar periódicamente; no es necesario importarlos a mano.
+
+### IT Infrastructure Overview
+
+**ES:** Vista de capacidad, CPU, memoria, red, uptime y salud de targets. CPU, RAM, red y uptime representan el Linux del Docker Engine/WSL2; el disco C: y Docker virtual disk se identifican por separado.
+
+**EN:** Host capacity, CPU, memory, network, uptime, and target health. CPU, RAM, network, and uptime describe the Docker Engine Linux environment; Windows C: and the Docker virtual disk are identified separately.
+
+![IT Infrastructure Overview with 14 panels and a 2/2 targets KPI](screenshots/01-infrastructure-overview.png)
+
+### Docker Container Monitoring
+
+**ES:** Snapshot del exporter host-side con cinco contenedores observados, CPU, memoria, red y frescura de colección. Los IDs cortos visibles son metadatos efímeros del runtime, no credenciales.
+
+**EN:** Host-side exporter snapshot with five observed containers, CPU, memory, network, and collection freshness. The visible short IDs are ephemeral runtime metadata, not credentials.
+
+![Docker Container Monitoring with exporter UP, collection OK, and five observed containers](screenshots/02-docker-container-monitoring.png)
+
+Las imágenes son capturas auténticas del estado en el momento de la captura. Se normalizaron los nombres de archivo; los bytes de las seis PNG permanecen idénticos.
+
+### Consultas representativas
+
+~~~promql
+# CPU ocupada del Linux Engine (%): promedio de CPU no idle
+100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{job="node-exporter",mode="idle"}[$__rate_interval])))
+
+# Memoria utilizada (%)
+100 * (1 - (node_memory_MemAvailable_bytes{job="node-exporter"} / node_memory_MemTotal_bytes{job="node-exporter"}))
+
+# Disk usage de Windows C: (volumen /mnt/host/c)
+100 * (1 - (node_filesystem_avail_bytes{job="node-exporter",mountpoint="/mnt/host/c"} / node_filesystem_size_bytes{job="node-exporter",mountpoint="/mnt/host/c"}))
+
+# Network RX total; excluye loopback y dispositivos virtuales de contenedor
+sum(rate(node_network_receive_bytes_total{job="node-exporter",device!~"lo|veth.*|docker.*|br-.*"}[$__rate_interval]))
+
+# Network TX total; mismo filtro de interfaces
+sum(rate(node_network_transmit_bytes_total{job="node-exporter",device!~"lo|veth.*|docker.*|br-.*"}[$__rate_interval]))
+
+# Targets UP del alcance de infraestructura (KPI muestra UP/total)
+sum(up{job=~"prometheus|node-exporter"})
+
+# Total de targets en el alcance del KPI
+count(up{job=~"prometheus|node-exporter"})
+
+# Uptime en segundos; Grafana lo presenta como duración
+time() - node_boot_time_seconds
 ~~~
 
-Node Exporter lee los pseudo-sistemas de archivos Linux que expone el daemon. En esta ejecución node_uname_info informó el kernel 6.18.54.1-microsoft-standard-WSL2 y la máquina x86_64. El disco de Docker Desktop también expuso /mnt/host/c como 9p; su espacio disponible coincidió con el volumen C: de Windows al momento de verificarlo. CPU, memoria, red y uptime corresponden al entorno Linux WSL2 del Docker Engine, no a Windows físico ni a Ubuntu WSL.
+El dashboard Docker consulta métricas itmc_container_*; sus agregados se limitan a series del job exporter y sus series por contenedor solo existen para el proyecto Compose seleccionado. Filesystem Capacity conserva /mnt/host/c y /mnt/docker-desktop-disk, agrupa con max by (mountpoint) para evitar duplicados lógicos y excluye device loop y fstype tmpfs, overlay, squashfs, proc, sysfs, cgroup, nsfs y devtmpfs. CPU/red excluyen loopback y las interfaces virtuales Docker. CPU, memoria y disco usan porcentaje; red usa bytes/s IEC y uptime se presenta como duración. Los umbrales principales son CPU 70/85 %, memoria 75/90 % y disco C: 75/90 %. Las unidades, filtros y semántica están descritos en [Arquitectura](docs/architecture.md) y [Exporter](docs/container-exporter.md).
 
-## Stack y versiones
+## Monitoreo y alertas
 
-| Componente | Versión fijada | Función |
-|---|---:|---|
-| Docker CLI observado | 29.9.2 | Cliente del motor |
-| Docker Compose observado | v5.6.1 | Orquestación |
-| Prometheus | 3.15.0 | Scraping y TSDB |
-| Grafana | 13.2.4 | Visualización |
-| Node Exporter | 1.12.1 | Métricas del host Linux visible al daemon |
-| Alertmanager | 0.34.1 | Agrupación y entrega de alertas |
-| Incident Logger | Python 3.13 (stdlib) | Receptor webhook e historial JSONL local |
-| Container Exporter | Python 3.10+ (stdlib, proceso host opcional) | Snapshot de CPU, memoria y red solo del proyecto Compose |
+El KPI **Targets UP / Total** de IT Infrastructure Overview cuenta solo los jobs Prometheus y Node Exporter, por eso indica **2/2**. La vista **Prometheus Targets** incluye además el job container-exporter y muestra **3/3**. Los dos valores tienen alcances distintos y son consistentes.
 
-Referencias oficiales: [Prometheus](https://github.com/prometheus/prometheus/releases), [Grafana](https://github.com/grafana/grafana/releases), [Node Exporter](https://github.com/prometheus/node_exporter/releases), [Alertmanager](https://github.com/prometheus/alertmanager/releases).
+La captura de reglas muestra las cuatro reglas de infraestructura y TestIncident como **INACTIVE**. En esta evidencia, el laboratorio estaba en estado normal: las reglas están cargadas pero ninguna condición estaba activa; TestIncident permanece inactiva por diseño salvo durante una simulación controlada.
 
-## Requisitos
+La captura de Alertmanager muestra **No alert groups found**. En ese momento no había grupos de alertas activos/recibidos para mostrar. Esto es coherente con el estado normal de las reglas y no indica por sí solo un fallo de Alertmanager.
 
-- Windows 11 x64, WSL2 y Docker Desktop con backend Linux.
-- Docker Compose v2 o posterior, navegador y puertos locales 3000, 9090 y 9093 libres; 9464 debe estar libre para el exporter opcional.
-- Memoria y disco disponibles en Docker Desktop. Retención: 15 días o 5 GB, lo que ocurra primero.
+## Evidencias
 
-Abre Docker Desktop antes de usar el laboratorio y confirma que el contexto Docker sea desktop-linux.
+Las siguientes cuatro capturas complementan las dos vistas de Grafana. Los enlaces abren los PNG originales sin edición:
 
-## Instalación
+| Evidencia | Español | English |
+|---|---|---|
+| [Prometheus Targets](screenshots/03-prometheus-targets.png) | 3/3 targets UP; incluye Prometheus, Node Exporter y container-exporter. | 3/3 targets UP, including Prometheus, Node Exporter, and container-exporter. |
+| [Reglas Prometheus](screenshots/04-prometheus-alert-rules.png) | Cuatro reglas de infraestructura y TestIncident inactivas en estado normal. | Four infrastructure rules and TestIncident inactive while the system is normal. |
+| [Alertmanager](screenshots/05-alertmanager-no-active-groups.png) | Sin grupos activos en el instante de la captura. | No active groups at capture time. |
+| [GitHub Actions CI](screenshots/06-github-actions-ci.png) | Ejecución #4 exitosa; los cuatro jobs aparecen en verde. | Successful run #4; all four jobs are green. |
+| [Detalle de la ejecución CI #4](https://github.com/charrixxz23/it-infrastructure-monitoring-center/actions/runs/40109656359) | Registro remoto de GitHub Actions. | GitHub Actions run details. |
 
-Copia .env.example a .env y sustituye el marcador de contraseña por una contraseña larga aleatoria. Nunca publiques .env.
+## GitHub Actions
 
-La ruta cAdvisor de Fase 3A se detuvo por seguridad: en Docker Desktop/WSL2 requería acceso a los sockets Docker y containerd. La alternativa Fase 3B usa un exporter Python local de loopback, sin montar sockets en contenedores; requiere ejecutarlo manualmente para que el dashboard Docker muestre datos. Consulta [la evaluación cAdvisor](docs/container-monitoring-assessment.md) y [el diseño del exporter](docs/container-exporter.md).
+En la [ejecución CI #4 del PR #1](https://github.com/charrixxz23/it-infrastructure-monitoring-center/actions/runs/40109656359) (commit de la rama del PR a07bbb4, posteriormente integrado en main como 56c5c87), GitHub Actions reportó éxito para los cuatro jobs:
 
-PowerShell desde la raíz:
+1. Python 3.10 tests.
+2. Python 3.13 tests.
+3. Static quality and security checks.
+4. Dashboard and monitoring configuration validation.
+
+Ese resultado valida el código integrado en esa ejecución; **no es una ejecución de esta rama de documentación**. GitHub debe volver a ejecutar CI cuando se abra un PR con estos cambios. El badge muestra el estado actual del workflow remoto.
+
+CI no inicia Docker Compose, no accede al daemon Windows/WSL2, no consulta métricas vivas ni autentica contra Grafana. Las comprobaciones estáticas y las pruebas con mocks están separadas de la validación local del runtime. Interpretación de fallos y comandos completos: [Integración continua](docs/ci.md).
+
+## Requisitos e inicio rápido
+
+- Windows 11, WSL2 y Docker Desktop con backend Linux para la configuración de referencia.
+- Docker Compose v2 o posterior; Python 3.10+ solo para el exporter host-side opcional.
+- Puertos locales disponibles: 3000 (Grafana), 9090 (Prometheus), 9093 (Alertmanager) y, si se activa el exporter, 9464.
+
+Desde PowerShell en la raíz del repositorio:
 
 ~~~powershell
 Copy-Item .env.example .env
-notepad .env
+notepad .env  # Define un valor local propio; no compartas el archivo.
 docker compose version
 docker compose config --quiet
 docker compose up -d
 docker compose ps
 ~~~
 
-Linux/WSL:
+Accesos locales: [Grafana](http://127.0.0.1:3000), [Prometheus](http://127.0.0.1:9090) y [Alertmanager](http://127.0.0.1:9093). Usa las credenciales que configures localmente en .env; el repositorio no publica credenciales.
 
-~~~bash
-cp .env.example .env
-# Edita .env y define una contraseña propia.
-docker compose version
-docker compose config --quiet
-docker compose up -d
-docker compose ps
-~~~
-
-Para habilitar el dashboard opcional de contenedores, espera a que Docker Desktop esté listo y ejecuta `docker context show` (`desktop-linux`) y `docker info`. Después abre una ventana de PowerShell en la raíz del repositorio y ejecuta `.\scripts\run-container-exporter.ps1`. El proceso foreground de Windows escucha en `127.0.0.1:9464`; pulsa `Ctrl+C` para detenerlo y vuelve a ejecutar el comando para reiniciarlo. No se inicia automáticamente tras cerrar la ventana o reiniciar Windows; el proyecto no instala tareas programadas ni servicios. Prometheus llega al listener por `host.docker.internal`. El proceso conserva acceso significativo al motor Docker como el usuario actual; lee solo etiquetas Compose y `docker stats`, pero no es una frontera de privilegios. Detalles en [docs/container-exporter.md](docs/container-exporter.md).
-
-## Acceso y dashboard
-
-- Grafana: [http://127.0.0.1:3000](http://127.0.0.1:3000). Credenciales definidas en .env.
-- Dashboard provisionado: **IT Infrastructure Overview**, carpeta **Infrastructure**.
-- Dashboard provisionado independiente: **Docker Container Monitoring** (requiere que el exporter local esté ejecutándose para mostrar métricas recientes).
-- Prometheus: [http://127.0.0.1:9090](http://127.0.0.1:9090).
-- Alertmanager: [http://127.0.0.1:9093](http://127.0.0.1:9093), interfaz de operación local.
-- Salud: [http://127.0.0.1:9090/-/healthy](http://127.0.0.1:9090/-/healthy).
-- Targets: [http://127.0.0.1:9090/targets](http://127.0.0.1:9090/targets).
-
-El dashboard tiene 14 paneles en cuatro secciones: seis KPIs (CPU y memoria del Linux Engine, disco C:, RX/TX y targets UP/total), cuatro tendencias en una sola fila, tres indicadores de estado/identidad y capacidad de almacenamiento. Está distribuido para aprovechar una pantalla 1920x1080, se actualiza cada 15 segundos y abre las últimas seis horas.
-
-Las consultas principales usan métricas reales de Node Exporter:
-
-- **CPU:** `100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{job="node-exporter",mode="idle"}[$__rate_interval])))`.
-- **Memoria:** `100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)`.
-- **Filesystem usado:** `max by (mountpoint) (100 * (1 - node_filesystem_avail_bytes / node_filesystem_size_bytes))`; `label_replace` nombra los volúmenes Windows C: y Docker virtual disk.
-- **Red:** `rate(node_network_receive_bytes_total[$__rate_interval])` y su equivalente `node_network_transmit_bytes_total`.
-- **Targets UP / Total:** dos consultas en un mismo KPI: `sum(up{job=~"prometheus|node-exporter"})` y `count(up{job=~"prometheus|node-exporter"})`. Este KPI conserva el alcance del dashboard de infraestructura (2/2); el exporter opcional tiene su propio indicador en Docker Container Monitoring. El panel Target Health conserva el estado individual de cada servicio.
-- **Uptime:** `time() - node_boot_time_seconds`.
-
-Los paneles de capacidad se limitan a `/mnt/host/c` y `/mnt/docker-desktop-disk`, excluyen `/dev/loop*`, tmpfs, overlay, squashfs, proc, sysfs, cgroup, nsfs y devtmpfs, y muestran una sola serie por `mountpoint`. La consulta agrupa con `max by (mountpoint)` para descartar dimensiones de etiqueta `device`, `fstype`, `instance` y `job`; si esas etiquetas contienen observaciones repetidas del mismo montaje, `max` conserva el mayor uso observado para no subestimar presión de capacidad. El bar gauge es una consulta instantánea y calcula el último valor, en vez de mostrar cada muestra del rango temporal. Los nombres visibles son **Windows C:** para `/mnt/host/c` (9p) y **Docker virtual disk** para `/mnt/docker-desktop-disk` (ext4). La tarjeta principal de disco usa C:. CPU y memoria llevan la etiqueta **Linux Engine**. En Docker Desktop/WSL2, CPU, RAM, red y uptime describen el motor Linux, no Windows físico ni Ubuntu WSL.
-
-CPU, memoria y disco se muestran en `%`; la red usa bytes/s IEC (KiB/s o MiB/s según el tráfico), y uptime usa duración legible. Los umbrales de CPU son 70/85 %, memoria 75/90 % y C: 75/90 %; la vista de capacidad usa 70/85 %. El estado por target muestra UP en verde y DOWN en rojo.
-
-## Alertas e historial de incidentes
-
-Prometheus carga las reglas versionadas desde `config/prometheus/rules/` y remite las alertas a Alertmanager dentro de la red `itmc-monitoring`. Alertmanager se guarda en el volumen `itmc-alertmanager-data` (retención de 120 horas) y su interfaz está disponible solo en [http://127.0.0.1:9093](http://127.0.0.1:9093). El logger recibe webhooks únicamente dentro de la red Docker, no publica puertos al host y guarda eventos JSONL en `itmc-incident-log-data`; cada archivo tiene un límite de 5 MiB y se conservan hasta tres archivos rotados además del actual.
-
-Reglas incluidas: `TargetDown` (un target configurado permanece DOWN 1 minuto, critical), `HighCPUUsage` (>85 % durante 5 minutos, warning), `HighMemoryUsage` (>90 % durante 5 minutos, warning) y `DiskSpaceCritical` (uso de `/mnt/host/c` >90 % durante 5 minutos, critical). CPU, RAM y uptime describen el Linux Engine/WSL2, no Windows físico. `up == 0` detecta targets configurados que fallan; no detecta un target eliminado de la configuración porque esa serie deja de existir.
-
-La deduplicación del logger usa `SHA-256(fingerprint + estado + startsAt)`: reintentos de la misma notificación se reconocen y un evento RESOLVED se registra por separado. El receptor guarda el estado FIRING/RESOLVED, severidad, fingerprint, etiquetas de contexto permitidas, anotaciones y marcas de tiempo. Como es un laboratorio local sin TLS ni autenticación de producción, no lo expongas fuera de Docker.
-
-`TestIncident` está desactivada normalmente (`vector(0) == 1`). `scripts/simulate-incident.ps1` y `scripts/simulate-incident.sh` la habilitan y deshabilitan temporalmente en el archivo dedicado `config/prometheus/test-rules/incident-test.yml`, recargan Prometheus y comprueban el ciclo completo por APIs y el registro real recibido vía Alertmanager. La regla se restaura con `try/finally`; los informes se escriben bajo `data/` (ignorado por Git). El simulador envía SIGHUP al proceso Prometheus mediante Compose y espera el contador de recarga exitosa, sin habilitar el endpoint HTTP de reload ni detener el servicio.
-
-Para comprobar que el dashboard y todas las consultas provisionadas siguen activos:
+Para el dashboard Docker opcional, espera a que Docker Desktop esté listo, confirma el contexto desktop-linux, y ejecuta en otra ventana PowerShell:
 
 ~~~powershell
+docker context show
+docker info
+.\scripts\run-container-exporter.ps1
+~~~
+
+El proceso permanece en primer plano y escucha en 127.0.0.1:9464. Usa Ctrl+C para detenerlo y vuelve a ejecutar el script para iniciarlo. **No se instala un servicio ni una tarea automática**; tras reiniciar Windows se requiere inicio manual. Docker CLI hereda el acceso significativo del usuario al daemon: el filtro por etiqueta Compose limita la selección de estadísticas, pero no reduce esos privilegios. host.docker.internal resuelve la conectividad desde Prometheus a través del proxy de Docker Desktop; no autentica al contenedor cliente ni crea una ACL. Consulta [Seguridad y operación del exporter](docs/container-exporter.md).
+
+## Pruebas
+
+Desde PowerShell, con herramientas CI instaladas según [docs/ci.md](docs/ci.md):
+
+~~~powershell
+python -m compileall -q services scripts
+python -m unittest discover -s services/incident-logger -p 'test_*.py' -v
+python -m unittest discover -s services/container-exporter -p 'test_*.py' -v
+python scripts/ci/validate_dashboards.py
+python scripts/ci/check_repo_hygiene.py
+python scripts/ci/validate_compose.py
 .\scripts\validate.ps1
 ~~~
 
-Con el exporter en ejecución, valida también su acceso al motor y el dashboard independiente:
+Con Docker Desktop activo, scripts/validate.ps1 comprueba el entorno local, las APIs de Prometheus/Grafana y el dashboard de infraestructura. Con el exporter iniciado, añade scripts/validate-container-exporter.ps1. Los unit tests del exporter simulan Docker CLI; no deben confundirse con la validación real del daemon local.
 
-~~~powershell
-.\scripts\validate-container-exporter.ps1
-~~~
+## Decisiones y límites de seguridad
 
-Para ejecutar validaciones de reglas y probar FIRING → RESOLVED sin generar carga real:
+- **Se descartó cAdvisor con sockets Docker/containerd.** Para obtener atribución de contenedores en el entorno evaluado requería acceso a interfaces sensibles del motor y metadatos del host. El acceso :ro al socket no convierte las operaciones de la API en solo lectura.
+- **Se eligió un exporter host-side en Python.** Usa Docker CLI desde Windows, filtra por etiqueta Compose y consulta snapshots de estadísticas. Ningún contenedor recibe el socket.
+- **El exporter sigue teniendo privilegios importantes.** El proceso hereda el acceso Docker del usuario; una modificación o vulnerabilidad podría abusar del daemon. Ejecuta solo código confiable y detén el proceso cuando no lo uses.
+- **Loopback y host.docker.internal tienen alcances distintos.** El proceso escucha solo en 127.0.0.1; Docker Desktop proxifica el camino desde la red de contenedores. Esa ruta no autentica al cliente y otros contenedores locales podrían leer el endpoint acotado.
+- **No es monitoreo del Windows físico.** Node Exporter mide el Linux visible al daemon. Para CPU/RAM del host Windows haría falta instrumentación específica de Windows, fuera del alcance actual.
+- Laboratorio local sin TLS ni autenticación de producción para Prometheus/Alertmanager. Mantén sus interfaces ligadas a loopback.
 
-~~~powershell
-docker compose up -d --build
-.\scripts\validate.ps1
-.\scripts\simulate-incident.ps1
-~~~
+## Documentación
 
-En WSL/Bash ejecuta `bash scripts/validate.sh` y `bash scripts/simulate-incident.sh`. El validador ejecuta `promtool check config`, `promtool check rules`, `promtool test rules` y `amtool check-config`, además de revisar servicios, API, datasource y dashboard. El simulador registra los tiempos observados por Prometheus, Alertmanager y el webhook; separa el momento en que Prometheus pasa a FIRING del momento en que llega la notificación.
-
-## Operación
-
-~~~powershell
-docker compose ps
-docker compose logs --tail=50
-docker compose logs -f prometheus
-docker compose logs -f grafana
-docker compose logs -f alertmanager incident-logger
-docker compose exec -T incident-logger python /app/incident_logger.py --tail 20
-docker compose restart
-docker compose down
-~~~
-
-Los volúmenes nombrados administrados por Compose persisten tras reiniciar y usar docker compose down. No uses docker compose down --volumes si quieres conservarlos.
-
-## Comprobaciones
-
-Con los servicios ya iniciados:
-
-~~~bash
-bash scripts/validate.sh
-~~~
-
-## Integración continua
-
-El workflow [CI](.github/workflows/ci.yml) valida Python y sus pruebas unitarias, los scripts PowerShell, los dashboards provisionados, Compose, Prometheus, Alertmanager y la higiene/seguridad básica del repositorio en runners Ubuntu. No levanta servicios ni accede al Docker Desktop del desarrollador. Consulta [docs/ci.md](docs/ci.md) para el alcance, los comandos locales y la interpretación de errores. Las comprobaciones de targets, datasource y métricas reales siguen requiriendo validación local sobre Docker Desktop/WSL2.
-
-Badge CI pendiente de conocer el remoto GitHub: `https://github.com/<owner>/<repo>/actions/workflows/ci.yml/badge.svg`.
-
-O desde PowerShell:
-
-~~~powershell
-.\scripts\validate.ps1
-~~~
-
-Los scripts consultan endpoints y verifican targets, métricas, datasource y dashboard. Para verificar persistencia, consulta la serie up en Prometheus, ejecuta docker compose restart, espera 30 segundos y consulta el historial y Grafana de nuevo. No es necesario borrar volúmenes.
-
-El estado real de este checkout está en [docs/verification-results.md](docs/verification-results.md). Separa validaciones estáticas de pruebas que requieren Docker activo.
-
-## Seguridad
-
-- Grafana, Prometheus y la interfaz web de Alertmanager solo publican en 127.0.0.1. Node Exporter no publica el puerto 9100; incident-logger tampoco publica puerto alguno.
-- Node Exporter e incident-logger permanecen solo en la red interna de scraping. Grafana, Prometheus y Alertmanager también se conectan a la red local de acceso porque Docker Desktop no publica puertos desde una red marcada internal. La red adicional permite salida de red a estos tres servicios, aunque las comprobaciones de actualizaciones y reportes de Grafana están desactivadas.
-- .env se ignora en Git y .env.example solo tiene un marcador de contraseña.
-- No se monta socket Docker, no se usa privileged ni namespace PID del host.
-- El exporter Docker no es contenedor: es un proceso del usuario en Windows, con acceso Docker significativo. Ejecuta solo desde código confiable. Su servidor se limita a `127.0.0.1`; el camino de Docker Desktop proxyado a loopback permite scraping desde contenedores y no identifica el contenedor cliente. Expone únicamente estadísticas acotadas del proyecto, sin nombres completos ni variables de entorno. Revisa [la evaluación de seguridad](docs/container-exporter.md).
-- Node Exporter monta /proc, /sys y / del host Linux en solo lectura. Esto expone datos sensibles del kernel/filesystem al exporter; revisa los permisos antes de ejecutar en otra máquina. La red local-access da salida de red a Prometheus, Grafana y Alertmanager; los chequeos de actualizaciones y reportes de Grafana están desactivados.
-- Prometheus no tiene autenticación en esta fase. Mantén su puerto en loopback.
-- Laboratorio local, sin TLS ni endurecimiento de producción.
-
-## Docker Desktop y WSL2
-
-Docker Desktop ejecuta el daemon Linux en una VM. Los bind mounts se resuelven en el contexto de ese daemon. Las métricas Node Exporter y Docker stats se deben describir como las del motor Linux, no Windows físico ni automáticamente Ubuntu en WSL. El exporter validó `host.docker.internal` desde Prometheus mientras escucha solo en loopback; Docker Desktop proxifica esa conexión al host. No se agregó una regla de firewall ni se abrió una interfaz LAN. Para Windows físico se necesitaría Windows Exporter.
-
-## Problemas comunes
-
-- **Daemon inaccesible:** abre Docker Desktop, espera el backend y comprueba el contexto y docker info.
-- **Falta .env:** copia .env.example y define una contraseña.
-- **Puerto ocupado:** identifica quién usa 3000 o 9090; no detengas servicios de otros proyectos.
-- **Node Exporter DOWN:** revisa los logs del servicio y el acceso del daemon a los montajes.
-- **Panel sin datos:** espera dos scrapes, revisa el rango temporal y Prometheus Targets.
-- **Dashboard no aparece:** revisa el JSON montado y logs de Grafana. Provisioning reescanea cada 30 s.
-- **Password olvidado:** revisa el valor local de .env; no borres volúmenes como primera medida.
-
-Más pasos en [docs/troubleshooting.md](docs/troubleshooting.md).
-
-## Próximas fases
-
-1. Evaluar autenticación/ACL por contenedor cliente si el entorno deja de ser un laboratorio local; Docker Desktop proxya el origen a loopback.
-2. Targets separados para Windows y/o Ubuntu WSL.
-3. Automatización de despliegue y recuperación.
-
-Alertmanager e historial local de incidentes forman parte de la fase 2. cAdvisor no se desplegó porque exige sockets sensibles; la alternativa host-side de Fase 3B y sus límites están documentados en [docs/container-monitoring-assessment.md](docs/container-monitoring-assessment.md) y [docs/container-exporter.md](docs/container-exporter.md).
-
-## Evidencias para GitHub
-
-No hay capturas ficticias. Cuando el laboratorio funcione, captura el dashboard con datos reales, Prometheus Targets con los dos jobs UP, docker compose ps y evidencia de node_uname_info. La lista está en [screenshots/README.md](screenshots/README.md). Oculta credenciales, datos personales y rutas locales.
+- [Arquitectura, métricas y límites del host](docs/architecture.md)
+- [Diagramas Mermaid](docs/diagrams.md)
+- [Exporter Docker local](docs/container-exporter.md)
+- [Evaluación de seguridad de cAdvisor](docs/container-monitoring-assessment.md)
+- [Integración continua](docs/ci.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Resultados de validación resumidos](docs/verification-results.md)

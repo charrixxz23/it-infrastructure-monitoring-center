@@ -54,6 +54,10 @@ También se recomienda `docker compose ps`, `docker compose config --quiet`, `sc
 
 El runner Ubuntu no representa Docker Desktop/WSL2 ni el Windows local. CI no ejecuta el exporter contra el daemon del runner, no inicia servicios Compose y no demuestra acceso real por `host.docker.internal`. Tampoco valida paneles mediante la API autenticada de Grafana ni consulta métricas vivas; la validación JSON confirma estructura e inventario, no que cada PromQL esté devolviendo muestras. Usa las comprobaciones locales anteriores para validar targets, datasource, salud de los cinco servicios y datos actuales.
 
+## Última ejecución remota verificada
+
+La [ejecución CI #4 asociada al PR #1](https://github.com/charrixxz23/it-infrastructure-monitoring-center/actions/runs/40109656359), en el commit de rama `a07bbb4` que se integró en `main` como `56c5c87`, concluyó con éxito en los cuatro jobs: Python 3.10 tests, Python 3.13 tests, Static quality and security checks, y Dashboard and monitoring configuration validation. Esta evidencia remota corresponde al código de ese PR; los cambios de documentación posteriores requieren su propia ejecución de GitHub Actions. No se confunde este resultado con los comandos locales.
+
 ## Interpretación de fallos
 
 - `unittest` o `compileall`: revisar lógica, imports o compatibilidad entre las versiones Python probadas.
@@ -66,13 +70,13 @@ El runner Ubuntu no representa Docker Desktop/WSL2 ni el Windows local. CI no ej
 
 ## Badge
 
-Cuando se conozca el remoto de GitHub, añadir el badge con su propietario y nombre reales:
+El README usa el badge del workflow existente en el repositorio:
 
-```text
-https://github.com/<owner>/<repo>/actions/workflows/ci.yml/badge.svg
+```markdown
+[![CI](https://github.com/charrixxz23/it-infrastructure-monitoring-center/actions/workflows/ci.yml/badge.svg)](https://github.com/charrixxz23/it-infrastructure-monitoring-center/actions/workflows/ci.yml)
 ```
 
-El repositorio local no permite inferir esa URL y no se configura una ficticia. Añadir el workflow no equivale a una ejecución remota: hasta que se suba la rama y GitHub Actions lo ejecute, el estado remoto queda pendiente.
+El badge refleja el estado que GitHub informa para la rama predeterminada. No demuestra que los cambios locales o una rama que aún no se ha enviado hayan pasado CI.
 
 ## Fuentes de las versiones fijadas
 
