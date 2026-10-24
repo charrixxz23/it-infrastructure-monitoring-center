@@ -19,6 +19,9 @@ foreach ($check in @(
 & python -m unittest discover -s services/incident-logger -p test_incident_logger.py
 if ($LASTEXITCODE -ne 0) { throw "Incident logger webhook tests failed." }
 Write-Host "PASS: incident logger webhook unit tests passed."
+& py -3 -m unittest discover -s services/container-exporter -p 'test_*.py'
+if ($LASTEXITCODE -ne 0) { throw "Container exporter unit tests failed." }
+Write-Host "PASS: container exporter unit tests passed."
 
 $settings = @{}
 foreach ($line in Get-Content -LiteralPath ".env") {

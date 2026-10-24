@@ -17,6 +17,8 @@ docker compose exec -T alertmanager amtool check-config /etc/alertmanager/alertm
 echo "PASS: Alertmanager config is valid."
 python3 -m unittest discover -s services/incident-logger -p test_incident_logger.py
 echo "PASS: incident logger webhook unit tests passed."
+python3 -m unittest discover -s services/container-exporter -p 'test_*.py'
+echo "PASS: container exporter unit tests passed."
 docker compose exec -T incident-logger python /app/incident_logger.py --healthcheck
 echo "PASS: incident logger health endpoint responds on its internal Docker network."
 alertmanager_port="$(docker compose port alertmanager 9093)"
