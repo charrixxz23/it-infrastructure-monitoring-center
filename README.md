@@ -178,6 +178,12 @@ Con los servicios ya iniciados:
 bash scripts/validate.sh
 ~~~
 
+## Integración continua
+
+El workflow [CI](.github/workflows/ci.yml) valida Python y sus pruebas unitarias, los scripts PowerShell, los dashboards provisionados, Compose, Prometheus, Alertmanager y la higiene/seguridad básica del repositorio en runners Ubuntu. No levanta servicios ni accede al Docker Desktop del desarrollador. Consulta [docs/ci.md](docs/ci.md) para el alcance, los comandos locales y la interpretación de errores. Las comprobaciones de targets, datasource y métricas reales siguen requiriendo validación local sobre Docker Desktop/WSL2.
+
+Badge CI pendiente de conocer el remoto GitHub: `https://github.com/<owner>/<repo>/actions/workflows/ci.yml/badge.svg`.
+
 O desde PowerShell:
 
 ~~~powershell

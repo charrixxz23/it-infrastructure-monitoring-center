@@ -4,7 +4,6 @@ import http.client
 import subprocess
 import threading
 import unittest
-from dataclasses import replace
 from http.server import ThreadingHTTPServer
 
 from container_exporter import (

@@ -9,8 +9,24 @@ data/
 *.wal
 *.log
 *.out
+*.tmp
+*.temp
+*.bak
+*.swp
+
+# Local secrets and Python tooling artifacts
+.secrets/
+.venv/
+venv/
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+.coverage
+coverage.xml
+htmlcov/
 
 # Editor / OS
 .vscode/
