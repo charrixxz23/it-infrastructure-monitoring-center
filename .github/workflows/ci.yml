@@ -1,0 +1,186 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - development
+      - "feature/**"
+      - "bugfix/**"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Python ${{ matrix.python-version }} tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.13"]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Compile Python sources
+        run: python -m compileall -q services scripts
+
+      - name: Test Incident Logger
+        run: python -m unittest discover -s services/incident-logger -p 'test_*.py' -v
+
+      - name: Test Container Exporter with mocked Docker CLI
+        run: python -m unittest discover -s services/container-exporter -p 'test_*.py' -v
+
+      - name: Parse PowerShell scripts without executing them
+        shell: pwsh
+        run: ./scripts/ci/validate-powershell.ps1
+
+  static-security:
+    name: Static quality and security checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install pinned CI tooling
+        run: python -m pip install --disable-pip-version-check -r .github/requirements-ci.txt
+
+      - name: Lint Python and check formatting
+        run: |
+          ruff check services scripts --select E4,E7,E9,F \
+            --target-version py310 --output-format=github
+          ruff format --check scripts/ci
+
+      - name: Lint YAML configuration
+        run: find .github config -type f \( -name '*.yml' -o -name '*.yaml' \) -print0 | xargs -0 yamllint
+
+      - name: Audit Python dependency manifests
+        run: |
+          python scripts/ci/check_runtime_dependencies.py
+          pip-audit --strict --requirement .github/requirements-ci.txt
+
+      - name: Check repository hygiene and ignore rules
+        run: python scripts/ci/check_repo_hygiene.py
+
+      - name: Install pinned Gitleaks and scan commit candidates with redacted findings
+        run: |
+          set -euo pipefail
+          version="8.30.1"
+          archive="gitleaks_${version}_linux_x64.tar.gz"
+          expected_sha256="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+          tool_dir="$RUNNER_TEMP/gitleaks"
+          mkdir -p "$tool_dir"
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${version}/${archive}" \
+            --output "$tool_dir/$archive"
+          echo "$expected_sha256  $tool_dir/$archive" | sha256sum --check
+          tar -xzf "$tool_dir/$archive" -C "$tool_dir" gitleaks
+          "$tool_dir/gitleaks" version
+          python scripts/ci/scan_secrets.py --gitleaks "$tool_dir/gitleaks"
+
+  configuration:
+    name: Dashboard and monitoring configuration validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install pinned CI tooling
+        run: python -m pip install --disable-pip-version-check -r .github/requirements-ci.txt
+
+      - name: Validate provisioned Grafana dashboards
+        run: python scripts/ci/validate_dashboards.py
+
+      - name: Validate Docker Compose without starting services
+        run: python scripts/ci/validate_compose.py
+
+      - name: Install exact Prometheus and Alertmanager validation binaries
+        run: |
+          set -euo pipefail
+          tool_dir="$RUNNER_TEMP/monitoring-tools"
+          mkdir -p "$tool_dir"
+
+          prom_version="3.15.0"
+          prom_archive="prometheus-${prom_version}.linux-amd64.tar.gz"
+          prom_sha256="2a542df32eac02ee17b9d844fb2aa1de00dafa5476579ba8a3ba862e9d572ea0"
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://github.com/prometheus/prometheus/releases/download/v${prom_version}/${prom_archive}" \
+            --output "$tool_dir/$prom_archive"
+          echo "$prom_sha256  $tool_dir/$prom_archive" | sha256sum --check
+          tar -xzf "$tool_dir/$prom_archive" -C "$tool_dir" "prometheus-${prom_version}.linux-amd64/promtool"
+
+          am_version="0.34.1"
+          am_archive="alertmanager-${am_version}.linux-amd64.tar.gz"
+          am_sha256="265b9d1e55ef0d5306a436018af6d2b686c2ce051f03d968f7464ecb1372a7e8"
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://github.com/prometheus/alertmanager/releases/download/v${am_version}/${am_archive}" \
+            --output "$tool_dir/$am_archive"
+          echo "$am_sha256  $tool_dir/$am_archive" | sha256sum --check
+          tar -xzf "$tool_dir/$am_archive" -C "$tool_dir" "alertmanager-${am_version}.linux-amd64/amtool"
+
+          echo "$tool_dir/prometheus-${prom_version}.linux-amd64" >> "$GITHUB_PATH"
+          echo "$tool_dir/alertmanager-${am_version}.linux-amd64" >> "$GITHUB_PATH"
+          "$tool_dir/prometheus-${prom_version}.linux-amd64/promtool" --version
+          "$tool_dir/alertmanager-${am_version}.linux-amd64/amtool" --version
+
+      - name: Check Prometheus configuration, rules, and rule tests
+        run: python scripts/ci/validate_prometheus.py
+
+      - name: Check Alertmanager configuration
+        run: amtool check-config config/alertmanager/alertmanager.yml
+
+      - name: Lint GitHub Actions workflow
+        run: |
+          set -euo pipefail
+          version="1.7.12"
+          archive="actionlint_${version}_linux_amd64.tar.gz"
+          expected_sha256="8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+          tool_dir="$RUNNER_TEMP/actionlint"
+          mkdir -p "$tool_dir"
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://github.com/rhysd/actionlint/releases/download/v${version}/${archive}" \
+            --output "$tool_dir/$archive"
+          echo "$expected_sha256  $tool_dir/$archive" | sha256sum --check
+          tar -xzf "$tool_dir/$archive" -C "$tool_dir" actionlint
+          "$tool_dir/actionlint" -version
+          "$tool_dir/actionlint" .github/workflows/ci.yml
+
+      - name: Publish job summary
+        if: always()
+        run: |
+          {
+            echo '## Configuration validation scope'
+            echo '- Dashboard JSON structure and expected panel inventories'
+            echo "- Docker Compose rendering with a disposable non-sensitive \`.env\`; no containers are started"
+            echo '- Prometheus config, rules, and rule tests using the project-pinned promtool version'
+            echo '- Alertmanager config using the project-pinned amtool version'
+            echo '- GitHub Actions workflow syntax and semantics'
+          } >> "$GITHUB_STEP_SUMMARY"

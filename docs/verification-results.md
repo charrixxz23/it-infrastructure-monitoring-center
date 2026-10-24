@@ -82,3 +82,60 @@ Se probaron ambos wrappers con la configuración final y Prometheus recargando p
 Las latencias anteriores son las realmente observadas. No se atribuye el retraso completo a `group_wait: 3s`: los ensayos incluyen evaluación de reglas, envío Prometheus, agrupación y notificación Alertmanager. El simulador separa las marcas de Prometheus, la observación de la API Alertmanager y las marcas de recepción del JSONL.
 
 No se produjo una captura visual: la pestaña disponible no tenía sesión autorizada. La API verificó el dashboard y el datasource sin iniciar sesión por el navegador ni capturar credenciales.
+
+## Evaluación inicial Fase 3A — cAdvisor detenida por seguridad
+
+Fecha: 2026-10-24 (hora de Panamá). Se evaluó cAdvisor v0.60.6 en el backend Docker Desktop/WSL2 con cgroups v2. Las combinaciones sin sockets produjeron CPU/memoria por cgroup opaco y/o red agregada, sin identidad fiable de cada contenedor. El acceso por socket Docker solo no inicializó la integración de Docker porque faltaba el socket containerd; containerd solo tampoco proporcionó métricas Docker individuales utilizables. La combinación de ambos sockets con `/` y `/sys` sí produjo series de CPU, memoria, red y observación con etiquetas reales de Compose.
+
+La evaluación se detuvo antes de modificar Compose o Prometheus porque ambos sockets son APIs de control del motor. El bind mount `:ro` no es una política de solo lectura para las operaciones de la API, y cAdvisor también leyó metadatos del host con los montajes requeridos. No se añadieron servicio, job, dashboard ni puertos. La explicación completa y alternativas están en [container-monitoring-assessment.md](container-monitoring-assessment.md).
+
+Se retiraron siete contenedores temporales de prueba creados por esta evaluación. No se crearon volúmenes y no se tocó ningún servicio de otro proyecto. En esa etapa no existían dashboard de contenedores ni target cAdvisor; la alternativa posterior Fase 3B se valida en la sección siguiente.
+
+## Fase 3B — exporter Docker local en Windows
+
+Fecha: 2026-10-24 (hora de Panamá). La ruta cAdvisor no se reabrió. Se implementó una alternativa host-side con Python 3.12.10 y la CLI Docker existente (contexto `desktop-linux`, Engine 29.9.2); el paquete Docker SDK no estaba instalado y no se agregó ninguna dependencia.
+
+### Seguridad y alcance comprobados
+
+- `docker ps` filtra `com.docker.compose.project=it-infrastructure-monitoring-center`; `docker stats --no-stream` recibe solo los IDs resultantes. La prueba real devolvió cinco contenedores del proyecto con CPU, memoria y contadores RX/TX.
+- Prometheus resolvió `host.docker.internal` a la dirección interna de Docker Desktop. Una conexión desde Prometheus llegó a un listener de prueba en `127.0.0.1`; Windows recibió al peer como `127.0.0.1`. El exporter en ejecución escucha exclusivamente en `127.0.0.1:9464` (PID local observado), y `Get-NetTCPConnection` confirmó esa única dirección. No se abrió una interfaz LAN ni se cambió Windows Firewall.
+- Docker Desktop proxifica las solicitudes de contenedores al host. Esa capa presenta peer loopback al proceso y no distingue Prometheus de otros contenedores; por ello otros contenedores locales podrían leer las métricas acotadas del proyecto. El exporter no publica nombres completos, imágenes, rutas, variables de entorno ni respuestas crudas del motor. Si se exige ACL exclusiva para Prometheus, esta ruta no la aporta.
+- La implementación ejecuta solo `ps` y `stats`; no ejecuta comandos para iniciar, detener, recrear o inspeccionar contenedores. HTTP implementa GET en `/health` y `/metrics`; los métodos de escritura responden 405. Timeout máximo por comando: 8 s; periodo de polling: 15 s; cardinalidad máxima: 32 contenedores, con fallo cerrado si se supera.
+- El proceso usa el acceso Docker del usuario actual y conserva privilegios significativos sobre el daemon. No se le entregó credencial adicional. Esa exposición queda documentada en [container-exporter.md](container-exporter.md).
+
+### Métricas y dashboards
+
+- Prometheus releyó su configuración mediante SIGHUP; no se detuvo ni recreó el contenedor Prometheus. Los cinco servicios Compose permanecieron `healthy`.
+- API de Prometheus: **3/3 targets UP** (`prometheus`, `node-exporter`, `container-exporter`).
+- Consultas instantáneas devolvieron cinco series CPU, cinco memoria, cinco RX y cinco TX; el gauge de observados indicó 5. Las consultas `rate(...[1m])` devolvieron cinco series tanto RX como TX.
+- Grafana API confirma el dashboard `Docker Container Monitoring`, provisionado automáticamente desde `config/grafana/dashboards/docker-container-monitoring.json`, con 12 paneles. Sus 13 expresiones PromQL coinciden con el JSON y cada una devolvió resultados en Prometheus.
+- El dashboard original `IT Infrastructure Overview` sigue aprovisionado con sus 14 paneles; datasource, consultas e infraestructura no mostraron regresiones.
+
+### Pruebas
+
+- 11 pruebas unitarias del exporter con respuestas Docker simuladas: parseo/identidad, filtro de etiqueta Compose, unidades, timeout, error del Engine, límite de cardinalidad, respuesta HTTP, rechazo de métodos de escritura y ausencia de metadatos sensibles. Pasaron en Windows Python y WSL Python.
+- `scripts/validate-container-exporter.ps1`: pasó pruebas, bind loopback, health, datos reales Prometheus, API/provisioning del dashboard nuevo y conservación de los 14 paneles anteriores.
+- `scripts/validate.ps1` y `scripts/validate.sh`: ambos finalizaron correctamente; se mantienen las pruebas de alertas/logger, reglas, datasource, targets de fase anterior y dashboard de infraestructura.
+- `docker compose config --quiet` y `promtool check config`: correctos. No se modificó `compose.yaml`; no se detuvo ni reinició ninguno de los cinco servicios, ni se tocaron otros proyectos o volúmenes.
+- La validación visual en navegador no se realizó; el resultado se comprobó por APIs, PromQL y bind local. No se capturaron ni solicitaron credenciales.
+
+El exporter está ejecutándose en la sesión de PowerShell usada para la validación. Para iniciarlo manualmente: `scripts/run-container-exporter.ps1`; para validarlo: `scripts/validate-container-exporter.ps1`; para detenerlo, `Ctrl+C` en la ventana donde corre.
+
+## Corrección de estados simultáneos en Docker Container Monitoring
+
+Fecha: 2026-10-24 (hora de Panamá). La revisión del dashboard independiente encontró que los paneles `Compose Containers Observed`, `Exporter Health` y `Docker Stats Collection` ya estaban configurados como consultas instantáneas (`instant: true`, `range: false`), con reducción `lastNotNull`, `values: false` y sin transformaciones. Por tanto, los valores dobles no eran puntos históricos ni una transformación/mapeo de Grafana.
+
+La causa estaba en las expresiones PromQL originales, que usaban `métrica{job="container-exporter"} or vector(0)`. La serie real incluía las etiquetas `job` e `instance`; `vector(0)` aportaba una segunda serie sin etiquetas (`{}`). La API de Prometheus devolvía dos resultados instantáneos en cada caso: `5` y `0` para contenedores observados, `1` y `0` para `up`, y `1` y `0` para colección. Los mapeos de valor de Grafana convertían ambas muestras de estado en los textos `UP`/`DOWN` y `OK`/`ERROR`, haciéndolas simultáneas aunque el target y la recolección reales estuvieran sanos.
+
+Se eliminaron esos fallbacks. El recuento de contenedores se agrega con `max(...)` y solo considera un snapshot si el target está UP y la colección Docker fue exitosa. `Exporter Health` usa `min(up{job="container-exporter"})`, con DOWN prevaleciendo si hubiera varios exporters. `Docker Stats Collection` usa `min(collection_success and on(job,instance) (up == 1))`: ERROR indica un fallo de colección mientras el target aún responde; si el target no responde, el resultado queda ausente y el otro KPI indica DOWN. La frescura usa el mayor `time() - last_success_timestamp` entre targets que responden. Los cuatro indicadores tienen consulta instantánea, reducción `lastNotNull`, `values: false` y `NO DATA` para un vector vacío. La ausencia nunca se reemplaza por cero ni se interpreta como UP.
+
+La actualización conserva el aprovisionamiento por archivos existente, su ruta `config/grafana/dashboards/docker-container-monitoring.json`, los 12 paneles del dashboard Docker y el dashboard original de infraestructura con sus 14 paneles. La versión del JSON se incrementó para que el proveedor detecte el cambio. No se modificaron Docker Compose, permisos, redes ni servicios.
+
+**Validación posterior:** la API de Grafana devolvió el dashboard con `provisioned=true`, origen `docker-container-monitoring.json`, versión cargada 3 y 12 paneles. Al evaluar las 13 expresiones PromQL mediante la API instantánea de Prometheus, las 12 tarjetas/paneles devolvieron datos: 1 serie para cada KPI/estado; 5 por contenedor para CPU, memoria y edad de observación; 10 en la gráfica de red (5 RX + 5 TX). En total se observaron 33 resultados de series entre todas las expresiones.
+
+- Prometheus devolvió una sola serie por cada estado: contenedores observados `5`, scrape `UP=1`, colección Docker `OK=1`; la edad de la última colección completa fue `21.1 s` y la del último scrape `6.5 s` en la validación final. El validador exigió una sola serie en las cuatro tarjetas de estado y verificó los mapeos `0 → DOWN`, `1 → UP`, `0 → ERROR`, `1 → OK`; una serie ausente produce `NO DATA`.
+- `scripts/validate-container-exporter.ps1`: pasó 11 pruebas unitarias, comprobó loopback, target Prometheus y snapshot real; validó modo instantáneo, reducción `lastNotNull`, ausencia de transformaciones, etiquetas de estado, las 13 expresiones reales, el aprovisionamiento de 12 paneles y que `IT Infrastructure Overview` conserva 14.
+- `scripts/validate.ps1`: pasó la configuración Compose y Prometheus, reglas y pruebas de reglas, cuatro pruebas del logger, 11 pruebas del exporter, consultas reales del dashboard de infraestructura, datasource Prometheus y KPI existente `2/2`.
+- `promtool check config` terminó correctamente. `docker compose ps` mostró los cinco servicios `healthy`; las comprobaciones combinadas de Prometheus verificaron sus tres targets (`prometheus`, `node-exporter`, `container-exporter`) UP. No se reinició ni detuvo ningún servicio.
+- El target exporter tuvo scrape correcto y menor a 45 s; la última muestra completa también estuvo dentro del umbral de 45 s. El cálculo del validador usa `DateTimeOffset` para no confundir UTC con la zona local de Panamá.
+- La pestaña de navegador disponible seguía en `/login` y no había sesión autorizada para inspección visual. No se intentó iniciar sesión ni se capturaron credenciales; la verificación del dashboard nuevo se hizo mediante API Grafana y API Prometheus.

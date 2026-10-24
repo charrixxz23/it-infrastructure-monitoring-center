@@ -9,11 +9,15 @@ flowchart LR
   graf["Grafana:3000"]
   am["Alertmanager:9093"]
   logger["Incident Logger:8080"]
+  exporter["Container Exporter Python\nWindows loopback :9464"]
+  dockercli["Docker CLI / desktop-linux"]
   scrape["itmc-monitoring, internal=true"]
   edge["local-access bridge"]
   browser["Navegador"]
   prom -->|"scrape 15 s"| ne
   prom -->|"localhost:9090 self-scrape"| prom
+  prom -->|"scrape 15 s: host.docker.internal"| exporter
+  exporter -->|"ps + stats read-only"| dockercli
   graf -->|"prometheus-internal:9090"| prom
   prom -->|"alertas"| am
   am -->|"webhook FIRING / RESOLVED"| logger
@@ -35,6 +39,8 @@ Prometheus obtiene métricas del propio servicio y de Node Exporter, evalúa las
 
 `incident-logger` escucha en el puerto 8080 únicamente en `itmc-monitoring`; no tiene mapeo de puertos al host. Su API acepta POST de Alertmanager en `/webhook` y responde a su healthcheck. El logger guarda JSONL persistente con rotación limitada (5 MiB por archivo, cuatro archivos como máximo) y elimina duplicados de notificación con una clave SHA-256 derivada de fingerprint, estado y `startsAt`. Alertmanager conserva su estado durante 120 horas en su propio volumen.
 
+El exporter Python es un proceso local de Windows, fuera de Compose. Prometheus lo scrapea por `host.docker.internal:9464`; el servidor del proceso solo se enlaza a `127.0.0.1`. Se comprobó que Docker Desktop proxifica la conexión de Prometheus hacia un listener loopback y que Windows recibe el peer como `127.0.0.1`; no se abrió un listener LAN ni se alteró firewall. El exporter ejecuta únicamente `docker ps` con el filtro de etiqueta del proyecto y `docker stats --no-stream` para los IDs resultantes. No se monta socket Docker en contenedores.
+
 ## Persistencia y retención
 
 - itmc-prometheus-data: TSDB con retención de 15 días o 5 GB.
@@ -52,10 +58,18 @@ Node Exporter monta /proc, /sys y / del host Linux del daemon en modo lectura y 
 
 En esta ejecución node_uname_info informó Linux, kernel 6.18.54.1-microsoft-standard-WSL2 y x86_64. El filesystem /mnt/host/c apareció como 9p y su espacio libre coincidió con el volumen C: de Windows al momento de comprobarlo. CPU, memoria, interfaces y uptime representan el Linux WSL2 del Docker Engine; no son métricas de CPU/memoria de Windows ni de la distro Ubuntu.
 
-Los montajes de raíz permiten leer detalles del filesystem y son sensibles aunque sean de solo lectura. No se monta socket Docker ni se añaden capacidades.
+Los montajes de raíz de Node Exporter permiten leer detalles del filesystem y son sensibles aunque sean de solo lectura. No se monta socket Docker dentro de contenedores. El proceso host del exporter sí hereda el acceso del usuario a Docker Desktop; aunque el código use únicamente operaciones de lectura, ese usuario conserva facultad significativa sobre el daemon. Usa este proceso solo con código confiable.
+
+## Fase 3A: cAdvisor no desplegado; alternativa 3B activa
+
+La ruta cAdvisor se detuvo antes de cambiar la arquitectura. En Docker Desktop/WSL2, las series individuales identificables y su tráfico de red solo aparecieron con acceso a los sockets Docker y containerd, además de montajes del host. No se desplegó cAdvisor. La alternativa Fase 3B es el proceso Python host-side descrito arriba; consulta [la evaluación cAdvisor](container-monitoring-assessment.md) y [el diseño y límites del exporter](container-exporter.md).
 
 ## Red y controles
 
 Red bridge dedicada itmc-monitoring con internal=true; Node Exporter solo es accesible dentro de esa red. Prometheus y Grafana se conectan también a local-access para que Docker Desktop reenvíe sus puertos a 127.0.0.1. Esta red brinda salida a Internet a esos dos servicios; el reporte, las consultas de actualización y los reportes de plugin de Grafana están desactivados. Credenciales en .env, ignorado por Git. no-new-privileges, cap_drop: ALL, sistema de archivos de solo lectura donde aplica y healthchecks reducen privilegios y facilitan verificar disponibilidad.
 
 Los tags de imagen fijan las versiones, pero no digests. Esto es suficiente para esta fase local; puede añadirse pinning de digest con revisión posterior. No se configura TLS, autenticación propia para Prometheus ni aislamiento de producción.
+
+## Integración continua
+
+GitHub Actions valida sintaxis y pruebas Python, analiza scripts PowerShell sin ejecutarlos, revisa el JSON provisionado y verifica configuraciones/reglas con versiones de promtool y amtool que coinciden con Prometheus y Alertmanager del Compose. `docker compose config` se ejecuta contra una copia temporal con un `.env` de prueba; ningún servicio ni volumen se inicia o modifica. El workflow solo requiere permiso `contents: read`, no contiene secretos y no ejecuta el exporter contra el daemon Linux del runner. Las comprobaciones vivas de Docker Desktop/WSL2, targets, datasource y consultas requieren los comandos locales descritos en [docs/ci.md](ci.md).

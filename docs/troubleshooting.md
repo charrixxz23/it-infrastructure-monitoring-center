@@ -60,6 +60,10 @@ docker compose logs --tail=100 grafana
 
 El proveedor revisa archivos cada 30 segundos. El datasource se define en config/grafana/provisioning/datasources/prometheus.yml.
 
+## Monitoreo Docker por contenedor no está disponible
+
+La ruta cAdvisor no está desplegada. Para la alternativa Python host-side, inicia el proceso desde PowerShell con `scripts/run-container-exporter.ps1`. Comprueba `docker context show` (`desktop-linux`), `http://127.0.0.1:9464/health` y Prometheus Targets. Si el exporter está saludable pero el target cae, revisa el acceso a `host.docker.internal:9464` desde Prometheus y el job en `config/prometheus/prometheus.yml`; no cambies el bind de loopback ni abras firewall a LAN. La colección puede informar error aunque `/health` responda si Docker Desktop no está disponible; el detalle aparece en métricas sin incluir la respuesta completa de Docker. Ejecuta `scripts/validate-container-exporter.ps1` para verificar la integración. El proceso host hereda privilegios Docker del usuario; consulta [sus límites](container-exporter.md). La justificación de no desplegar cAdvisor está en [la evaluación anterior](container-monitoring-assessment.md).
+
 ## Alertas o webhook no llegan
 
 ~~~powershell

@@ -1,6 +1,6 @@
 # IT Infrastructure Monitoring Center
 
-Centro local de monitoreo con Prometheus, Grafana, Node Exporter y Alertmanager. Reúne métricas Linux en un dashboard provisionado automáticamente, evalúa alertas y conserva un historial local de incidentes, con configuración reproducible y puertos limitados a la máquina local.
+Centro local de monitoreo con Prometheus, Grafana, Node Exporter y Alertmanager. Reúne métricas Linux en un dashboard provisionado automáticamente, evalúa alertas y conserva un historial local de incidentes. Incluye un exporter Python opcional en Windows que consulta Docker CLI con el filtro de proyecto y escucha solo en loopback.
 
 > English: A reproducible local infrastructure monitoring lab built with Prometheus, Grafana, Node Exporter, Alertmanager, and Docker Compose. It provisions a dashboard, evaluates alerts, records local incidents, and persists state.
 
@@ -20,8 +20,12 @@ flowchart LR
     scrape["Red interna itmc-monitoring"]
     edge["Red local-access"]
     browser["Navegador local"]
+    exp["Exporter Python en Windows\n127.0.0.1:9464"]
+    engine["Docker CLI → Docker Desktop"]
     prom -->|"scrape 15 s"| ne
     prom -->|"autocolección"| prom
+    prom -->|"scrape 15 s vía host.docker.internal"| exp
+    exp -->|"docker ps + stats --no-stream"| engine
     graf -->|"prometheus-internal:9090"| prom
     prom -->|"alertas"| am
     am -->|"webhook FIRING / RESOLVED"| logger
@@ -52,13 +56,14 @@ Node Exporter lee los pseudo-sistemas de archivos Linux que expone el daemon. En
 | Node Exporter | 1.12.1 | Métricas del host Linux visible al daemon |
 | Alertmanager | 0.34.1 | Agrupación y entrega de alertas |
 | Incident Logger | Python 3.13 (stdlib) | Receptor webhook e historial JSONL local |
+| Container Exporter | Python 3.10+ (stdlib, proceso host opcional) | Snapshot de CPU, memoria y red solo del proyecto Compose |
 
 Referencias oficiales: [Prometheus](https://github.com/prometheus/prometheus/releases), [Grafana](https://github.com/grafana/grafana/releases), [Node Exporter](https://github.com/prometheus/node_exporter/releases), [Alertmanager](https://github.com/prometheus/alertmanager/releases).
 
 ## Requisitos
 
 - Windows 11 x64, WSL2 y Docker Desktop con backend Linux.
-- Docker Compose v2 o posterior, navegador y puertos locales 3000, 9090 y 9093 libres.
+- Docker Compose v2 o posterior, navegador y puertos locales 3000, 9090 y 9093 libres; 9464 debe estar libre para el exporter opcional.
 - Memoria y disco disponibles en Docker Desktop. Retención: 15 días o 5 GB, lo que ocurra primero.
 
 Abre Docker Desktop antes de usar el laboratorio y confirma que el contexto Docker sea desktop-linux.
@@ -66,6 +71,8 @@ Abre Docker Desktop antes de usar el laboratorio y confirma que el contexto Dock
 ## Instalación
 
 Copia .env.example a .env y sustituye el marcador de contraseña por una contraseña larga aleatoria. Nunca publiques .env.
+
+La ruta cAdvisor de Fase 3A se detuvo por seguridad: en Docker Desktop/WSL2 requería acceso a los sockets Docker y containerd. La alternativa Fase 3B usa un exporter Python local de loopback, sin montar sockets en contenedores; requiere ejecutarlo manualmente para que el dashboard Docker muestre datos. Consulta [la evaluación cAdvisor](docs/container-monitoring-assessment.md) y [el diseño del exporter](docs/container-exporter.md).
 
 PowerShell desde la raíz:
 
@@ -89,10 +96,13 @@ docker compose up -d
 docker compose ps
 ~~~
 
+Para habilitar el dashboard opcional de contenedores, espera a que Docker Desktop esté listo y ejecuta `docker context show` (`desktop-linux`) y `docker info`. Después abre una ventana de PowerShell en la raíz del repositorio y ejecuta `.\scripts\run-container-exporter.ps1`. El proceso foreground de Windows escucha en `127.0.0.1:9464`; pulsa `Ctrl+C` para detenerlo y vuelve a ejecutar el comando para reiniciarlo. No se inicia automáticamente tras cerrar la ventana o reiniciar Windows; el proyecto no instala tareas programadas ni servicios. Prometheus llega al listener por `host.docker.internal`. El proceso conserva acceso significativo al motor Docker como el usuario actual; lee solo etiquetas Compose y `docker stats`, pero no es una frontera de privilegios. Detalles en [docs/container-exporter.md](docs/container-exporter.md).
+
 ## Acceso y dashboard
 
 - Grafana: [http://127.0.0.1:3000](http://127.0.0.1:3000). Credenciales definidas en .env.
 - Dashboard provisionado: **IT Infrastructure Overview**, carpeta **Infrastructure**.
+- Dashboard provisionado independiente: **Docker Container Monitoring** (requiere que el exporter local esté ejecutándose para mostrar métricas recientes).
 - Prometheus: [http://127.0.0.1:9090](http://127.0.0.1:9090).
 - Alertmanager: [http://127.0.0.1:9093](http://127.0.0.1:9093), interfaz de operación local.
 - Salud: [http://127.0.0.1:9090/-/healthy](http://127.0.0.1:9090/-/healthy).
@@ -106,7 +116,7 @@ Las consultas principales usan métricas reales de Node Exporter:
 - **Memoria:** `100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)`.
 - **Filesystem usado:** `max by (mountpoint) (100 * (1 - node_filesystem_avail_bytes / node_filesystem_size_bytes))`; `label_replace` nombra los volúmenes Windows C: y Docker virtual disk.
 - **Red:** `rate(node_network_receive_bytes_total[$__rate_interval])` y su equivalente `node_network_transmit_bytes_total`.
-- **Targets UP / Total:** dos consultas en un mismo KPI: `sum(up{job=~"prometheus|node-exporter"})` y `count(up{job=~"prometheus|node-exporter"})`. El panel Target Health conserva el estado individual de cada servicio.
+- **Targets UP / Total:** dos consultas en un mismo KPI: `sum(up{job=~"prometheus|node-exporter"})` y `count(up{job=~"prometheus|node-exporter"})`. Este KPI conserva el alcance del dashboard de infraestructura (2/2); el exporter opcional tiene su propio indicador en Docker Container Monitoring. El panel Target Health conserva el estado individual de cada servicio.
 - **Uptime:** `time() - node_boot_time_seconds`.
 
 Los paneles de capacidad se limitan a `/mnt/host/c` y `/mnt/docker-desktop-disk`, excluyen `/dev/loop*`, tmpfs, overlay, squashfs, proc, sysfs, cgroup, nsfs y devtmpfs, y muestran una sola serie por `mountpoint`. La consulta agrupa con `max by (mountpoint)` para descartar dimensiones de etiqueta `device`, `fstype`, `instance` y `job`; si esas etiquetas contienen observaciones repetidas del mismo montaje, `max` conserva el mayor uso observado para no subestimar presión de capacidad. El bar gauge es una consulta instantánea y calcula el último valor, en vez de mostrar cada muestra del rango temporal. Los nombres visibles son **Windows C:** para `/mnt/host/c` (9p) y **Docker virtual disk** para `/mnt/docker-desktop-disk` (ext4). La tarjeta principal de disco usa C:. CPU y memoria llevan la etiqueta **Linux Engine**. En Docker Desktop/WSL2, CPU, RAM, red y uptime describen el motor Linux, no Windows físico ni Ubuntu WSL.
@@ -127,6 +137,12 @@ Para comprobar que el dashboard y todas las consultas provisionadas siguen activ
 
 ~~~powershell
 .\scripts\validate.ps1
+~~~
+
+Con el exporter en ejecución, valida también su acceso al motor y el dashboard independiente:
+
+~~~powershell
+.\scripts\validate-container-exporter.ps1
 ~~~
 
 Para ejecutar validaciones de reglas y probar FIRING → RESOLVED sin generar carga real:
@@ -162,6 +178,12 @@ Con los servicios ya iniciados:
 bash scripts/validate.sh
 ~~~
 
+## Integración continua
+
+El workflow [CI](.github/workflows/ci.yml) valida Python y sus pruebas unitarias, los scripts PowerShell, los dashboards provisionados, Compose, Prometheus, Alertmanager y la higiene/seguridad básica del repositorio en runners Ubuntu. No levanta servicios ni accede al Docker Desktop del desarrollador. Consulta [docs/ci.md](docs/ci.md) para el alcance, los comandos locales y la interpretación de errores. Las comprobaciones de targets, datasource y métricas reales siguen requiriendo validación local sobre Docker Desktop/WSL2.
+
+Badge CI pendiente de conocer el remoto GitHub: `https://github.com/<owner>/<repo>/actions/workflows/ci.yml/badge.svg`.
+
 O desde PowerShell:
 
 ~~~powershell
@@ -178,13 +200,14 @@ El estado real de este checkout está en [docs/verification-results.md](docs/ver
 - Node Exporter e incident-logger permanecen solo en la red interna de scraping. Grafana, Prometheus y Alertmanager también se conectan a la red local de acceso porque Docker Desktop no publica puertos desde una red marcada internal. La red adicional permite salida de red a estos tres servicios, aunque las comprobaciones de actualizaciones y reportes de Grafana están desactivadas.
 - .env se ignora en Git y .env.example solo tiene un marcador de contraseña.
 - No se monta socket Docker, no se usa privileged ni namespace PID del host.
+- El exporter Docker no es contenedor: es un proceso del usuario en Windows, con acceso Docker significativo. Ejecuta solo desde código confiable. Su servidor se limita a `127.0.0.1`; el camino de Docker Desktop proxyado a loopback permite scraping desde contenedores y no identifica el contenedor cliente. Expone únicamente estadísticas acotadas del proyecto, sin nombres completos ni variables de entorno. Revisa [la evaluación de seguridad](docs/container-exporter.md).
 - Node Exporter monta /proc, /sys y / del host Linux en solo lectura. Esto expone datos sensibles del kernel/filesystem al exporter; revisa los permisos antes de ejecutar en otra máquina. La red local-access da salida de red a Prometheus, Grafana y Alertmanager; los chequeos de actualizaciones y reportes de Grafana están desactivados.
 - Prometheus no tiene autenticación en esta fase. Mantén su puerto en loopback.
 - Laboratorio local, sin TLS ni endurecimiento de producción.
 
 ## Docker Desktop y WSL2
 
-Docker Desktop ejecuta el daemon Linux en una VM. Los bind mounts se resuelven en el contexto de ese daemon. Las métricas se deben describir como las del Linux visible a Docker, no Windows físico ni automáticamente Ubuntu en WSL. Para Ubuntu se puede desplegar Node Exporter directamente dentro de esa distro y luego configurar una ruta enrutable desde Compose. Para Windows se necesitaría Windows Exporter. Estas alternativas quedan fuera de fase 1.
+Docker Desktop ejecuta el daemon Linux en una VM. Los bind mounts se resuelven en el contexto de ese daemon. Las métricas Node Exporter y Docker stats se deben describir como las del motor Linux, no Windows físico ni automáticamente Ubuntu en WSL. El exporter validó `host.docker.internal` desde Prometheus mientras escucha solo en loopback; Docker Desktop proxifica esa conexión al host. No se agregó una regla de firewall ni se abrió una interfaz LAN. Para Windows físico se necesitaría Windows Exporter.
 
 ## Problemas comunes
 
@@ -200,11 +223,11 @@ Más pasos en [docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## Próximas fases
 
-1. cAdvisor y métricas por contenedor, tras evaluar alcance y permisos.
+1. Evaluar autenticación/ACL por contenedor cliente si el entorno deja de ser un laboratorio local; Docker Desktop proxya el origen a loopback.
 2. Targets separados para Windows y/o Ubuntu WSL.
 3. Automatización de despliegue y recuperación.
 
-Alertmanager e historial local de incidentes forman parte de esta fase 2. cAdvisor sigue fuera del alcance.
+Alertmanager e historial local de incidentes forman parte de la fase 2. cAdvisor no se desplegó porque exige sockets sensibles; la alternativa host-side de Fase 3B y sus límites están documentados en [docs/container-monitoring-assessment.md](docs/container-monitoring-assessment.md) y [docs/container-exporter.md](docs/container-exporter.md).
 
 ## Evidencias para GitHub
 
