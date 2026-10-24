@@ -8,11 +8,15 @@
 [![Docker Compose](https://img.shields.io/badge/Docker_Compose-v2%2B-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 
+> **ES — [Sitio web público](https://it-infrastructure-monitoring-center.pages.dev/):** capturas reales y documentación del proyecto; no muestra métricas en vivo.
+>
+> **EN — [Live Website](https://it-infrastructure-monitoring-center.pages.dev/):** authentic screenshots and project documentation; it does not display live metrics.
+
 **ES —** Laboratorio local de observabilidad para una infraestructura Docker: métricas de host con Prometheus y Node Exporter, visualización en Grafana, reglas de alertas y registro de incidentes. Incluye un exporter Python opcional, ejecutado en Windows, para observar estadísticas de los contenedores del proyecto.
 
 **EN —** A reproducible local observability lab for a Docker-based infrastructure: host metrics with Prometheus and Node Exporter, Grafana dashboards, alert rules, and an incident log. An optional Windows-hosted Python exporter collects statistics for this Compose project’s containers.
 
-> Proyecto educativo y de portafolio. No incluye despliegue cloud ni pretende ser una configuración de producción.
+> Proyecto educativo y de portafolio. El laboratorio de monitoreo es local; el portal estático está publicado en Cloudflare Pages. La infraestructura no se presenta como una configuración de producción.
 
 ## Navegación
 
