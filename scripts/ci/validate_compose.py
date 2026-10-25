@@ -24,6 +24,7 @@ IGNORED_NAMES = {
     ".mypy_cache",
     ".tox",
     "data",
+    ".secrets",
     "home-network.yml",
 }
 
@@ -88,8 +89,46 @@ def main() -> int:
             )
             return error.returncode or 1
 
+        # Render the opt-in override with inert test files in the disposable copy.
+        # Never copy any host secrets from the working tree into this temporary tree.
+        temporary_secrets = project_copy / ".secrets"
+        temporary_secrets.mkdir()
+        (temporary_secrets / "telegram-bot-token").write_text(
+            "ci-placeholder-not-a-credential", encoding="utf-8"
+        )
+        (temporary_secrets / "telegram-chat-id").write_text("0", encoding="utf-8")
+        try:
+            subprocess.run(
+                [
+                    docker,
+                    "compose",
+                    "-f",
+                    "compose.yaml",
+                    "-f",
+                    "compose.telegram.yaml",
+                    "config",
+                    "--quiet",
+                ],
+                cwd=project_copy,
+                check=True,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired:
+            print(
+                "ERROR: opt-in Compose configuration validation exceeded its 30-second timeout.",
+                file=sys.stderr,
+            )
+            return 1
+        except subprocess.CalledProcessError as error:
+            print(
+                "ERROR: opt-in Compose configuration failed with exit code "
+                f"{error.returncode}.",
+                file=sys.stderr,
+            )
+            return error.returncode or 1
+
     print(
-        "PASS: Compose configuration rendered with a disposable CI-only .env; no services were started."
+        "PASS: default and opt-in Compose configurations rendered with disposable non-sensitive CI files; no services were started."
     )
     return 0
 

@@ -1,0 +1,13 @@
+{{ define "telegram.home_network.message" -}}
+{{- if eq .Status "firing" -}}
+FIRING — Home Network Monitoring
+{{- else -}}
+RESOLVED — Home Network Monitoring
+{{- end }}
+{{- range .Alerts }}
+• {{ .Labels.alertname }} ({{ .Labels.severity }})
+{{- with .Annotations.summary }}
+  {{ . }}
+{{- end }}
+{{- end -}}
+{{- end }}

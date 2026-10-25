@@ -1,0 +1,33 @@
+# Opt-in only. The default `docker compose up` does not load this file or require
+# local Telegram credential files.
+services:
+  alertmanager:
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.telegram.yml
+      - --storage.path=/alertmanager
+      - --data.retention=120h
+    volumes:
+      - type: bind
+        source: ./config/alertmanager/alertmanager.telegram.yml
+        target: /etc/alertmanager/alertmanager.telegram.yml
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/alertmanager/templates/telegram-home-network.tmpl
+        target: /etc/alertmanager/templates/telegram-home-network.tmpl
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./.secrets/telegram-bot-token
+        target: /run/secrets/telegram_bot_token
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./.secrets/telegram-chat-id
+        target: /run/secrets/telegram_chat_id
+        read_only: true
+        bind:
+          create_host_path: false
