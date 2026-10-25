@@ -16,6 +16,7 @@ IGNORE_PROBES = [
     "services/example/__pycache__/module.pyc",
     ".venv/pyvenv.cfg",
     ".ruff_cache/cache",
+    "config/prometheus/targets/home-network.yml",
     "example.log",
     "example.db",
     "example.tmp",

@@ -24,6 +24,7 @@ IGNORED_NAMES = {
     ".mypy_cache",
     ".tox",
     "data",
+    "home-network.yml",
 }
 
 

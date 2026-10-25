@@ -28,6 +28,9 @@ __pycache__/
 coverage.xml
 htmlcov/
 
+# Home LAN targets are host-specific and must never be versioned
+/config/prometheus/targets/home-network.yml
+
 # Editor / OS
 .vscode/
 .idea/

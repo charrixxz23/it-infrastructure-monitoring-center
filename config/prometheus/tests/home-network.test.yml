@@ -1,0 +1,212 @@
+rule_files:
+  - ../rules/home-network.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: router-down-fires-and-resolves-after-recovery
+    interval: 1m
+    input_series:
+      - series: 'up{job="blackbox-exporter", instance="blackbox-exporter:9115"}'
+        values: '1+0x5'
+      - series: 'up{job="home-router-icmp", instance="home-router"}'
+        values: '1+0x5'
+      - series: 'probe_success{job="home-router-icmp", instance="home-router"}'
+        values: '0 0 0 1 1 1'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HomeRouterUnavailable
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: HomeRouterUnavailable
+        exp_alerts:
+          - exp_labels:
+              alertname: HomeRouterUnavailable
+              instance: home-router
+              job: home-router-icmp
+              severity: critical
+              source: home-network
+            exp_annotations:
+              summary: "Home router is not answering ICMP"
+              description: "The router ICMP probe has failed for two minutes while Blackbox Exporter is returning metrics. This can also indicate ICMP filtering."
+      - eval_time: 3m
+        alertname: HomeRouterUnavailable
+        exp_alerts: []
+
+  - name: internet-alert-waits-and-requires-router-reachability
+    interval: 1m
+    input_series:
+      - series: 'up{job="blackbox-exporter", instance="blackbox-exporter:9115"}'
+        values: '1+0x5'
+      - series: 'up{job="home-router-icmp", instance="home-router"}'
+        values: '1+0x5'
+      - series: 'probe_success{job="home-router-icmp", instance="home-router"}'
+        values: '1+0x5'
+      - series: 'up{job="home-https", instance="public-https-example"}'
+        values: '1+0x5'
+      - series: 'probe_success{job="home-https", instance="public-https-example"}'
+        values: '0+0x5'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HomeInternetHTTPSUnavailable
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: HomeInternetHTTPSUnavailable
+        exp_alerts:
+          - exp_labels:
+              alertname: HomeInternetHTTPSUnavailable
+              instance: public-https-example
+              job: home-https
+              severity: warning
+              source: home-network
+            exp_annotations:
+              summary: "External HTTPS check is failing while the router responds"
+              description: "The approved HTTPS target has failed for three minutes while the local router responds; investigate WAN, DNS, or remote service conditions."
+
+  - name: router-failure-suppresses-dependent-internet-alert
+    interval: 1m
+    input_series:
+      - series: 'up{job="blackbox-exporter", instance="blackbox-exporter:9115"}'
+        values: '1+0x5'
+      - series: 'up{job="home-router-icmp", instance="home-router"}'
+        values: '1+0x5'
+      - series: 'probe_success{job="home-router-icmp", instance="home-router"}'
+        values: '0+0x5'
+      - series: 'up{job="home-https", instance="public-https-example"}'
+        values: '1+0x5'
+      - series: 'probe_success{job="home-https", instance="public-https-example"}'
+        values: '0+0x5'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HomeRouterUnavailable
+        exp_alerts:
+          - exp_labels:
+              alertname: HomeRouterUnavailable
+              instance: home-router
+              job: home-router-icmp
+              severity: critical
+              source: home-network
+            exp_annotations:
+              summary: "Home router is not answering ICMP"
+              description: "The router ICMP probe has failed for two minutes while Blackbox Exporter is returning metrics. This can also indicate ICMP filtering."
+      - eval_time: 3m
+        alertname: HomeInternetHTTPSUnavailable
+        exp_alerts: []
+
+  - name: exporter-failure-is-not-reported-as-router-failure
+    interval: 1m
+    input_series:
+      - series: 'up{job="blackbox-exporter", instance="blackbox-exporter:9115"}'
+        values: '0+0x4'
+      - series: 'up{job="home-router-icmp", instance="home-router"}'
+        values: '0+0x4'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: BlackboxExporterDown
+        exp_alerts:
+          - exp_labels:
+              alertname: BlackboxExporterDown
+              instance: blackbox-exporter:9115
+              job: blackbox-exporter
+              severity: critical
+              source: home-network
+            exp_annotations:
+              summary: "Blackbox Exporter is unreachable"
+              description: "Prometheus cannot scrape the internal Blackbox Exporter endpoint. Target reachability is unknown until the exporter recovers."
+      - eval_time: 2m
+        alertname: HomeRouterUnavailable
+        exp_alerts: []
+
+  - name: dns-failure-fires-only-while-router-is-reachable
+    interval: 1m
+    input_series:
+      - series: 'up{job="blackbox-exporter", instance="blackbox-exporter:9115"}'
+        values: '1+0x4'
+      - series: 'up{job="home-router-icmp", instance="home-router"}'
+        values: '1+0x4'
+      - series: 'probe_success{job="home-router-icmp", instance="home-router"}'
+        values: '1+0x4'
+      - series: 'up{job="home-dns-a", instance="public-dns-a"}'
+        values: '1+0x4'
+      - series: 'probe_success{job="home-dns-a", instance="public-dns-a"}'
+        values: '0+0x4'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HomeDNSResolutionUnavailable
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: HomeDNSResolutionUnavailable
+        exp_alerts:
+          - exp_labels:
+              alertname: HomeDNSResolutionUnavailable
+              instance: public-dns-a
+              job: home-dns-a
+              severity: warning
+              source: home-network
+            exp_annotations:
+              summary: "Approved external DNS query is failing"
+              description: "The configured example.com DNS query to the approved resolver failed for two minutes while the router is reachable."
+
+  - name: missing-blackbox-exporter-target-is-distinct
+    interval: 1m
+    input_series: []
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: BlackboxExporterTargetMissing
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: BlackboxExporterTargetMissing
+        exp_alerts:
+          - exp_labels:
+              alertname: BlackboxExporterTargetMissing
+              job: blackbox-exporter
+              severity: warning
+              source: home-network
+            exp_annotations:
+              summary: "Blackbox Exporter scrape target is missing"
+              description: "The static exporter health target is absent from Prometheus configuration."
+
+  - name: missing-router-target-is-not-a-router-outage
+    interval: 1m
+    input_series:
+      - series: 'up{job="blackbox-exporter", instance="blackbox-exporter:9115"}'
+        values: '1+0x4'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HomeRouterTargetMissing
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: HomeRouterTargetMissing
+        exp_alerts:
+          - exp_labels:
+              alertname: HomeRouterTargetMissing
+              job: home-router-icmp
+              severity: warning
+              source: home-network
+            exp_annotations:
+              summary: "Local router target is not configured"
+              description: "Blackbox Exporter is healthy, but the ignored local router target file did not produce a Prometheus target."
+
+  - name: probe-scrape-error-is-distinct-from-target-probe-failure
+    interval: 1m
+    input_series:
+      - series: 'up{job="blackbox-exporter", instance="blackbox-exporter:9115"}'
+        values: '1+0x4'
+      - series: 'up{job="home-router-icmp", instance="home-router"}'
+        values: '0+0x4'
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: HomeProbeExecutionError
+        exp_alerts: []
+      - eval_time: 1m
+        alertname: HomeProbeExecutionError
+        exp_alerts:
+          - exp_labels:
+              alertname: HomeProbeExecutionError
+              instance: home-router
+              job: home-router-icmp
+              severity: warning
+              source: home-network
+            exp_annotations:
+              summary: "Blackbox probe request failed"
+              description: "The exporter is healthy but a configured probe endpoint returned a scrape error; this is distinct from a target probe_success failure."

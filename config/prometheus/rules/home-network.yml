@@ -1,0 +1,73 @@
+groups:
+  - name: home-network
+    interval: 15s
+    rules:
+      - alert: BlackboxExporterDown
+        expr: up{job="blackbox-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          source: home-network
+        annotations:
+          summary: "Blackbox Exporter is unreachable"
+          description: "Prometheus cannot scrape the internal Blackbox Exporter endpoint. Target reachability is unknown until the exporter recovers."
+
+      - alert: BlackboxExporterTargetMissing
+        expr: absent(up{job="blackbox-exporter"})
+        for: 2m
+        labels:
+          severity: warning
+          source: home-network
+        annotations:
+          summary: "Blackbox Exporter scrape target is missing"
+          description: "The static exporter health target is absent from Prometheus configuration."
+
+      - alert: HomeProbeExecutionError
+        expr: up{job=~"home-router-icmp|home-internet-icmp|home-dns-a|home-dns-aaaa|home-https"} == 0 and on() (up{job="blackbox-exporter"} == 1)
+        for: 1m
+        labels:
+          severity: warning
+          source: home-network
+        annotations:
+          summary: "Blackbox probe request failed"
+          description: "The exporter is healthy but a configured probe endpoint returned a scrape error; this is distinct from a target probe_success failure."
+
+      - alert: HomeRouterTargetMissing
+        expr: absent(up{job="home-router-icmp"}) and on() (up{job="blackbox-exporter"} == 1)
+        for: 2m
+        labels:
+          severity: warning
+          source: home-network
+        annotations:
+          summary: "Local router target is not configured"
+          description: "Blackbox Exporter is healthy, but the ignored local router target file did not produce a Prometheus target."
+
+      - alert: HomeRouterUnavailable
+        expr: probe_success{job="home-router-icmp"} == 0 and on(job, instance) (up{job="home-router-icmp"} == 1)
+        for: 2m
+        labels:
+          severity: critical
+          source: home-network
+        annotations:
+          summary: "Home router is not answering ICMP"
+          description: "The router ICMP probe has failed for two minutes while Blackbox Exporter is returning metrics. This can also indicate ICMP filtering."
+
+      - alert: HomeDNSResolutionUnavailable
+        expr: probe_success{job=~"home-dns-a|home-dns-aaaa"} == 0 and on(job, instance) (up{job=~"home-dns-a|home-dns-aaaa"} == 1) and on() (probe_success{job="home-router-icmp"} == 1)
+        for: 2m
+        labels:
+          severity: warning
+          source: home-network
+        annotations:
+          summary: "Approved external DNS query is failing"
+          description: "The configured example.com DNS query to the approved resolver failed for two minutes while the router is reachable."
+
+      - alert: HomeInternetHTTPSUnavailable
+        expr: probe_success{job="home-https"} == 0 and on(job, instance) (up{job="home-https"} == 1) and on() (probe_success{job="home-router-icmp"} == 1)
+        for: 3m
+        labels:
+          severity: warning
+          source: home-network
+        annotations:
+          summary: "External HTTPS check is failing while the router responds"
+          description: "The approved HTTPS target has failed for three minutes while the local router responds; investigate WAN, DNS, or remote service conditions."

@@ -122,7 +122,7 @@ jobs:
       - name: Check repository hygiene and ignore rules
         run: python scripts/ci/check_repo_hygiene.py
 
-      - name: Validate cloud documentation links and Mermaid blocks
+      - name: Validate documentation links and Mermaid blocks
         run: python scripts/ci/validate_cloud_docs.py
 
       - name: Install pinned Gitleaks and scan commit candidates with redacted findings
@@ -159,6 +159,9 @@ jobs:
 
       - name: Validate provisioned Grafana dashboards
         run: python scripts/ci/validate_dashboards.py
+
+      - name: Validate the approved Blackbox targets and least-privilege wiring
+        run: python scripts/ci/validate_blackbox.py
 
       - name: Validate Docker Compose without starting services
         run: python scripts/ci/validate_compose.py

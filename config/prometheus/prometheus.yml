@@ -30,3 +30,103 @@ scrape_configs:
     static_configs:
       - targets:
           - host.docker.internal:9464
+
+  - job_name: blackbox-exporter
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    static_configs:
+      - targets:
+          - blackbox-exporter:9115
+
+  - job_name: home-router-icmp
+    scrape_interval: 30s
+    scrape_timeout: 5s
+    metrics_path: /probe
+    params:
+      module: [icmp_ipv4]
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/targets/home-network.yml
+        refresh_interval: 30s
+    relabel_configs:
+      - source_labels: [probe_name]
+        action: keep
+        regex: home-router
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [probe_name]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  - job_name: home-internet-icmp
+    scrape_interval: 30s
+    scrape_timeout: 5s
+    metrics_path: /probe
+    params:
+      module: [icmp_ipv4]
+    static_configs:
+      - targets: [1.1.1.1]
+        labels:
+          probe_name: public-ip
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [probe_name]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  - job_name: home-dns-a
+    scrape_interval: 60s
+    scrape_timeout: 8s
+    metrics_path: /probe
+    params:
+      module: [dns_a_example]
+    static_configs:
+      - targets: ["1.1.1.1:53"]
+        labels:
+          probe_name: public-dns-a
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [probe_name]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  - job_name: home-dns-aaaa
+    scrape_interval: 60s
+    scrape_timeout: 8s
+    metrics_path: /probe
+    params:
+      module: [dns_aaaa_example]
+    static_configs:
+      - targets: ["1.1.1.1:53"]
+        labels:
+          probe_name: public-dns-aaaa
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [probe_name]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  - job_name: home-https
+    scrape_interval: 60s
+    scrape_timeout: 10s
+    metrics_path: /probe
+    params:
+      module: [https_ipv4]
+    static_configs:
+      - targets: [https://example.com]
+        labels:
+          probe_name: public-https-example
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [probe_name]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
