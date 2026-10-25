@@ -16,9 +16,13 @@ ROOT = Path(__file__).resolve().parents[2]
 PROMETHEUS_CONFIG = ROOT / "config" / "prometheus" / "prometheus.yml"
 RULE_FILES = [
     ROOT / "config" / "prometheus" / "rules" / "infrastructure.yml",
+    ROOT / "config" / "prometheus" / "rules" / "home-network.yml",
     ROOT / "config" / "prometheus" / "test-rules" / "incident-test.yml",
 ]
-RULE_TEST = ROOT / "config" / "prometheus" / "tests" / "infrastructure.test.yml"
+RULE_TESTS = [
+    ROOT / "config" / "prometheus" / "tests" / "infrastructure.test.yml",
+    ROOT / "config" / "prometheus" / "tests" / "home-network.test.yml",
+]
 
 
 def run(command: list[str]) -> None:
@@ -54,12 +58,19 @@ def main() -> int:
     try:
         with tempfile.TemporaryDirectory(prefix="itmc-promtool-ci-") as temporary_root:
             temporary_config = Path(temporary_root) / "prometheus.yml"
+            temporary_targets = Path(temporary_root) / "etc" / "prometheus" / "targets"
+            temporary_targets.mkdir(parents=True)
+            shutil.copyfile(
+                ROOT / "config" / "prometheus" / "targets" / "home-network.example.yml",
+                temporary_targets / "home-network.yml",
+            )
             temporary_config.write_text(
                 yaml.safe_dump(config, sort_keys=False), encoding="utf-8"
             )
             run([promtool, "check", "config", str(temporary_config)])
         run([promtool, "check", "rules", *(str(path) for path in RULE_FILES)])
-        run([promtool, "test", "rules", str(RULE_TEST)])
+        for rule_test in RULE_TESTS:
+            run([promtool, "test", "rules", str(rule_test)])
     except subprocess.TimeoutExpired as error:
         print(f"ERROR: promtool timed out: {error.cmd}", file=sys.stderr)
         return 1

@@ -1,0 +1,6 @@
+# Copy to home-network.yml (gitignored) and replace the documentation address
+# with the single router address approved for local ICMP monitoring.
+- targets:
+    - 192.0.2.1
+  labels:
+    probe_name: home-router

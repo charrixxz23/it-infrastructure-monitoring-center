@@ -17,11 +17,13 @@ services:
       - ./config/prometheus/rules:/etc/prometheus/rules:ro
       - ./config/prometheus/test-rules:/etc/prometheus/test-rules:ro
       - ./config/prometheus/tests:/etc/prometheus/tests:ro
+      - ./config/prometheus/targets:/etc/prometheus/targets:ro
     networks:
       monitoring:
         aliases:
           - prometheus-internal
       local-access: {}
+      home-probes: {}
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -35,6 +37,33 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.28.0@sha256:e753ff9f3fc458d02cca5eddab5a77e1c175eee484a8925ac7d524f04366c2fc
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/blackbox_exporter/blackbox.yml
+      - --web.listen-address=:9115
+    volumes:
+      - ./config/blackbox/blackbox.yml:/etc/blackbox_exporter/blackbox.yml:ro
+    networks:
+      - home-probes
+    user: "65534:65534"
+    sysctls:
+      net.ipv4.ping_group_range: "65534 65534"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9115/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   node-exporter:
     image: prom/node-exporter:v1.12.1
@@ -179,6 +208,9 @@ networks:
   # Docker Desktop needs a non-internal bridge for loopback port forwarding.
   # Only Prometheus and Grafana join this bridge; Node Exporter stays isolated.
   local-access:
+    driver: bridge
+  # Egress network shared only by Prometheus and Blackbox; exporter has no published port.
+  home-probes:
     driver: bridge
 
 volumes:

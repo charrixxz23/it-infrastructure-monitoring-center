@@ -75,3 +75,9 @@ Los tags de imagen fijan las versiones, pero no digests. Esto es suficiente para
 ## Integración continua
 
 GitHub Actions valida sintaxis y pruebas Python, analiza scripts PowerShell sin ejecutarlos, revisa el JSON provisionado y verifica configuraciones/reglas con versiones de promtool y amtool que coinciden con Prometheus y Alertmanager del Compose. `docker compose config` se ejecuta contra una copia temporal con un `.env` de prueba; ningún servicio ni volumen se inicia o modifica. El workflow solo requiere permiso `contents: read`, no contiene secretos y no ejecuta el exporter contra el daemon Linux del runner. Las comprobaciones vivas de Docker Desktop/WSL2, targets, datasource y consultas requieren los comandos locales descritos en [docs/ci.md](ci.md).
+
+## Home Network Monitoring — preparada en `feature/home-network-monitoring`
+
+La rama añade Blackbox Exporter 0.28.0 y una red `home-probes` dedicada a Prometheus y al exporter. Esa red bridge permite salida hacia los destinos aprobados; el exporter no publica puertos, no recibe socket Docker, descarta capabilities y prueba ICMP con un rango de ping socket limitado. Los destinos externos configurados son `1.1.1.1` (ICMP y DNS por UDP/53) y `example.com` (HTTPS, sin seguir redirecciones). El router doméstico se especifica solo en un archivo local ignorado por Git.
+
+La integración está activa en el entorno local validado: el scrape del exporter y los cinco probes devolvieron muestras recientes exitosas. Este resultado depende de la conectividad particular de Docker Desktop/WSL2 y no garantiza historial continuo. Ver [arquitectura/seguridad y activación doméstica](home-network-monitoring.md), [runbook](runbooks/home-network.md) e [informe redactado de preparación](incidents/blackbox-exporter-preparation.md).

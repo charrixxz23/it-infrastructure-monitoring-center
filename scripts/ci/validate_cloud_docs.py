@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate local links and basic fenced Mermaid structure in cloud docs."""
+"""Validate local links and basic fenced Mermaid structure in project docs."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from urllib.parse import unquote, urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[2]
-MARKDOWN_FILES = [ROOT / "README.md", *sorted((ROOT / "docs" / "cloud").glob("*.md"))]
+MARKDOWN_FILES = [ROOT / "README.md", *sorted((ROOT / "docs").rglob("*.md"))]
 LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)\s]+)(?:\s+[^)]*)?\)")
 FENCE_RE = re.compile(
     r"^\s*(`{3,}|~{3,})([^\r\n]*)\r?\n([\s\S]*?)^\s*\1\s*$", re.MULTILINE
@@ -125,12 +125,12 @@ def main() -> int:
         return 1
     errors = validate_links() + validate_mermaid()
     if errors:
-        print("Cloud documentation validation failed:")
+        print("Documentation validation failed:")
         for error in errors:
             print(f"- {error}")
         return 1
     print(
-        f"Cloud documentation validation passed: {len(MARKDOWN_FILES)} Markdown files; local links and Mermaid blocks checked."
+        f"Documentation validation passed: {len(MARKDOWN_FILES)} Markdown files; local links and Mermaid blocks checked."
     )
     return 0
 
