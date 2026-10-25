@@ -201,6 +201,9 @@ jobs:
       - name: Check Alertmanager configuration
         run: amtool check-config config/alertmanager/alertmanager.yml
 
+      - name: Validate opt-in Telegram routing and message templates without delivery
+        run: python scripts/ci/validate_telegram_alertmanager.py
+
       - name: Lint GitHub Actions workflow
         run: |
           set -euo pipefail
