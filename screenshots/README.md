@@ -1,6 +1,6 @@
 # Evidencia visual
 
-Las seis imágenes siguientes son capturas PNG auténticas entregadas para esta documentación. Se revisaron visualmente y se verificaron sus dimensiones y chunks de metadata. Solo se normalizaron los nombres. Los hashes SHA-256 antes y después de renombrar coinciden: los datos de imagen no se modificaron.
+Las seis imágenes originales de la galería y la captura adicional de Home Network Monitoring son PNG auténticas entregadas para esta documentación. Se revisaron visualmente y se verificaron sus dimensiones y chunks de metadata. Solo se normalizaron los nombres de las seis originales; sus hashes SHA-256 antes y después de renombrar coinciden. La captura adicional se conserva byte a byte, sin modificar sus datos.
 
 ## Dashboards de Grafana
 
@@ -10,6 +10,14 @@ Las seis imágenes siguientes son capturas PNG auténticas entregadas para esta 
 | [02-docker-container-monitoring.png](02-docker-container-monitoring.png) | 2532 × 1405 | Dashboard de contenedores: cinco contenedores observados, exporter UP y colección OK. | Container dashboard: five observed containers, exporter UP, and collection OK. |
 
 Las dos imágenes principales se muestran en el [README](../README.md). Los valores corresponden al instante capturado, no a un estado garantizado en tiempo real.
+
+## Home Network Monitoring
+
+| Archivo | Dimensiones | Español | English |
+|---|---:|---|---|
+| [07-home-network-monitoring.png](07-home-network-monitoring.png) | 2559 × 1306 | Captura auténtica de Home Network Monitoring: cinco sondas y Blackbox Exporter saludable. Evidencia estática; no se publican targets privados ni métricas en vivo. | Authentic Home Network Monitoring screenshot: five probes and healthy Blackbox Exporter. Static evidence; private targets and live metrics are not published. |
+
+La imagen se muestra en su propia sección del portal Astro mediante el visor accesible existente. El portal es estático y no consulta el entorno doméstico.
 
 ## Otras evidencias
 

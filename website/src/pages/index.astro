@@ -3,6 +3,7 @@ import "../styles/site.css";
 
 const repository = "https://github.com/charrixxz23/it-infrastructure-monitoring-center";
 const repositoryDocs = `${repository}/blob/main/docs`;
+const repositoryMain = `${repository}/blob/main`;
 const release = `${repository}/releases/tag/v1.0.0`;
 const ciRun = `${repository}/actions/runs/40116633928`;
 
@@ -116,6 +117,15 @@ const docs = [
   { href: `${repositoryDocs}/ci.md`, labelEs: "Integración continua", labelEn: "Continuous integration" },
   { href: `${repositoryDocs}/troubleshooting.md`, labelEs: "Troubleshooting", labelEn: "Troubleshooting" },
 ];
+
+const networkDocs = [
+  { href: `${repositoryMain}/docs/home-network-monitoring.md`, labelEs: "Arquitectura y seguridad", labelEn: "Architecture and security" },
+  { href: `${repositoryMain}/docs/runbooks/home-network.md`, labelEs: "Runbook técnico", labelEn: "Technical runbook" },
+  { href: `${repositoryMain}/docs/incidents/blackbox-exporter-preparation.md`, labelEs: "Informe del incidente", labelEn: "Incident report" },
+  { href: `${repositoryMain}/docs/templates/home-network-postmortem.md`, labelEs: "Plantilla de postmortem", labelEn: "Postmortem template" },
+  { href: `${repositoryMain}/config/grafana/dashboards/home-network-monitoring.json`, labelEs: "JSON del dashboard", labelEn: "Dashboard JSON" },
+  { href: `${repositoryMain}/config/prometheus/rules/home-network.yml`, labelEs: "Reglas de alerta", labelEn: "Alert rules" },
+];
 ---
 
 <!doctype html>
@@ -146,6 +156,7 @@ const docs = [
           <a href="#overview"><span class="lang-es">Proyecto</span><span class="lang-en">Project</span></a>
           <a href="#architecture"><span class="lang-es">Arquitectura</span><span class="lang-en">Architecture</span></a>
           <a href="#dashboards"><span class="lang-es">Dashboards</span><span class="lang-en">Dashboards</span></a>
+          <a href="#real-network"><span class="lang-es">Red real</span><span class="lang-en">Network</span></a>
           <a href="#delivery"><span class="lang-es">CI</span><span class="lang-en">CI</span></a>
           <a href="#roadmap"><span class="lang-es">Roadmap</span><span class="lang-en">Roadmap</span></a>
         </nav>
@@ -248,9 +259,58 @@ const docs = [
         </div>
       </section>
 
+      <section class="section section-border" id="real-network" aria-labelledby="real-network-title">
+        <div class="container">
+          <div class="section-heading"><div><p class="section-index">03 / REAL-WORLD NETWORK MONITORING</p><h2 id="real-network-title"><span class="lang-es">Monitoreo de red real</span><span class="lang-en">Real-World Network Monitoring</span></h2></div><p class="section-intro lang-es">ITMC pasó de validar un laboratorio de observabilidad a aplicar las mismas señales en una red doméstica bajo administración de su propietario.</p><p class="section-intro lang-en">ITMC evolved from validating an observability lab to applying the same signals to an owner-managed home network.</p></div>
+
+          <div class="network-showcase">
+            <article class="network-summary">
+              <p class="network-eyebrow"><span class="status-led" aria-hidden="true"></span><span class="lang-es">EVIDENCIA LOCAL · VALIDADA</span><span class="lang-en">LOCAL EVIDENCE · VERIFIED</span></p>
+              <h3><span class="lang-es">Una ruta de observación por capas</span><span class="lang-en">Layered network observability</span></h3>
+              <p class="network-summary-copy lang-es">Blackbox Exporter ejecuta sondas desde la red Linux de Docker Desktop/WSL2. La web es estática: documenta evidencia real, no consulta la red ni muestra telemetría en vivo.</p>
+              <p class="network-summary-copy lang-en">Blackbox Exporter runs probes from Docker Desktop/WSL2 Linux networking. This site is static: it presents real evidence, does not query the network, and shows no live telemetry.</p>
+              <div class="network-stats" aria-label="Verified project scope">
+                <div><strong>05</strong><span class="lang-es">sondas verificadas</span><span class="lang-en">verified probes</span></div>
+                <div><strong>13</strong><span class="lang-es">paneles Grafana</span><span class="lang-en">Grafana panels</span></div>
+                <div><strong>07</strong><span class="lang-es">reglas de alerta</span><span class="lang-en">alert rules</span></div>
+              </div>
+              <p class="network-scope-note"><span class="footnote-mark" aria-hidden="true">i</span><span class="lang-es">Son características verificadas del laboratorio, no indicadores dinámicos de disponibilidad actual.</span><span class="lang-en">These are verified lab capabilities, not dynamic indicators of current availability.</span></p>
+            </article>
+
+            <article class="network-capture-card">
+              <button class="network-capture-button" type="button" data-open-image data-image-src="/screenshots/07-home-network-monitoring.png" data-image-alt-es="Captura auténtica del dashboard Home Network Monitoring: cinco sondas, gráficas de latencia y disponibilidad, y estado saludable de Blackbox Exporter." data-image-alt-en="Authentic Home Network Monitoring dashboard screenshot: five probes, latency and availability charts, and healthy Blackbox Exporter." data-image-caption-es="Home Network Monitoring — captura real proporcionada por el propietario; evidencia estática, sin modificación de valores." data-image-caption-en="Home Network Monitoring — authentic capture supplied by the owner; static evidence with values unchanged." data-aria-es="Ampliar captura del dashboard Home Network Monitoring" data-aria-en="Open the Home Network Monitoring dashboard screenshot">
+                <img src="/screenshots/07-home-network-monitoring.png" alt="Captura auténtica del dashboard Home Network Monitoring con estado de router, sondas externas y exporter; evidencia estática." width="2559" height="1306" loading="lazy" decoding="async" />
+                <span class="image-open-mark" aria-hidden="true">↗</span>
+              </button>
+              <div class="network-capture-caption"><div><strong>Home Network Monitoring</strong><span class="lang-es">Grafana · 13 paneles</span><span class="lang-en">Grafana · 13 panels</span></div><span class="capture-label"><span class="lang-es">CAPTURA AUTÉNTICA</span><span class="lang-en">AUTHENTIC CAPTURE</span></span></div>
+            </article>
+          </div>
+
+          <div class="network-probes-grid" aria-label="Probe types">
+            <article class="network-probe-card"><span class="network-probe-code">01 / ICMP</span><h3><span class="lang-es">Router doméstico</span><span class="lang-en">Home router</span></h3><p class="lang-es">Comprobación de alcance al gateway configurado localmente.</p><p class="lang-en">Reachability check to the locally configured gateway.</p></article>
+            <article class="network-probe-card"><span class="network-probe-code">02 / ICMP</span><h3><span class="lang-es">Conectividad externa</span><span class="lang-en">External reachability</span></h3><p class="lang-es">Sonda a un destino externo expresamente aprobado; no representa por sí sola toda la conexión a Internet.</p><p class="lang-en">Probe to an explicitly approved external endpoint; it does not alone represent all Internet connectivity.</p></article>
+            <article class="network-probe-card"><span class="network-probe-code">03 / DNS A</span><h3><span class="lang-es">Resolución IPv4</span><span class="lang-en">IPv4 resolution</span></h3><p class="lang-es">Consulta DNS del registro A para el dominio de prueba configurado.</p><p class="lang-en">DNS lookup for the configured test domain's A record.</p></article>
+            <article class="network-probe-card"><span class="network-probe-code">04 / DNS AAAA</span><h3><span class="lang-es">Resolución IPv6</span><span class="lang-en">IPv6 resolution</span></h3><p class="lang-es">Consulta separada del registro AAAA, con estado propio.</p><p class="lang-en">Separate AAAA record lookup with its own status.</p></article>
+            <article class="network-probe-card"><span class="network-probe-code">05 / HTTPS</span><h3><span class="lang-es">Servicio web externo</span><span class="lang-en">External HTTPS service</span></h3><p class="lang-es">Conexión TLS a un endpoint fijo, sin seguir redirecciones a otros destinos.</p><p class="lang-en">TLS connection to a fixed endpoint, without following redirects to other destinations.</p></article>
+            <article class="network-probe-card network-probe-exporter"><span class="network-probe-code">OBSERVABILITY</span><h3>Blackbox Exporter</h3><p class="lang-es">Su estado confirma el scrape del componente, no la disponibilidad de los destinos.</p><p class="lang-en">Its status confirms component scraping, not destination availability.</p></article>
+          </div>
+
+          <article class="network-incident-card">
+            <div class="network-incident-main"><p class="network-eyebrow"><span class="network-incident-led" aria-hidden="true"></span><span class="lang-es">CICLO DE INCIDENTE DOCUMENTADO</span><span class="lang-en">DOCUMENTED INCIDENT LIFECYCLE</span></p><h3>BlackboxExporterDown</h3><div class="network-incident-flow"><span>FIRING</span><span aria-hidden="true">→</span><span>RESOLVED</span><strong>25 min 15 s</strong></div></div>
+            <p class="network-incident-copy lang-es">Incidente de preparación: se confirmó la interrupción y recuperación del scrape de Blackbox, no una caída del ISP. La causa específica quedó sin confirmar; durante parte del intervalo no hubo muestras para determinar la conectividad externa.</p>
+            <p class="network-incident-copy lang-en">Preparation incident: the Blackbox scrape interruption and recovery were confirmed, not an ISP outage. The specific cause remains unconfirmed; part of the interval had no samples to determine external connectivity.</p>
+          </article>
+
+          <div class="network-limitations">
+            <div><h3><span class="lang-es">Límites de esta evidencia</span><span class="lang-en">Evidence boundaries</span></h3><p class="lang-es">El monitoreo es local y depende de Windows y Docker Desktop/WSL2 encendidos. El portal muestra capturas, no métricas en vivo. El laboratorio doméstico no está desplegado en Oracle Cloud; las IP, MAC, SSID y targets privados se mantienen fuera del repositorio.</p><p class="lang-en">Monitoring runs locally and depends on Windows and Docker Desktop/WSL2 staying on. This portal shows screenshots, not live metrics. The home lab is not deployed to Oracle Cloud; private IPs, MACs, SSIDs, and targets stay out of the repository.</p></div>
+            <nav class="network-doc-links" aria-label="Home Network Monitoring documentation">{networkDocs.map((doc) => <a href={doc.href} target="_blank" rel="noreferrer noopener"><span class="lang-es">{doc.labelEs}</span><span class="lang-en">{doc.labelEn}</span><span aria-hidden="true">↗</span></a>)}</nav>
+          </div>
+        </div>
+      </section>
+
       <section class="section section-border" id="architecture" aria-labelledby="architecture-title">
         <div class="container">
-          <div class="section-heading"><div><p class="section-index">03 / ARCHITECTURE</p><h2 id="architecture-title"><span class="lang-es">Dos entornos, sin confundirlos</span><span class="lang-en">Two environments, clearly separated</span></h2></div><p class="section-intro lang-es">La solución actual es local. La arquitectura cloud está en diseño y no se ha desplegado ni conectado a este host.</p><p class="section-intro lang-en">The current solution is local. The cloud architecture is under design and has not been deployed or connected to this host.</p></div>
+          <div class="section-heading"><div><p class="section-index">04 / ARCHITECTURE</p><h2 id="architecture-title"><span class="lang-es">Dos entornos, sin confundirlos</span><span class="lang-en">Two environments, clearly separated</span></h2></div><p class="section-intro lang-es">La solución actual es local. La arquitectura cloud está en diseño y no se ha desplegado ni conectado a este host.</p><p class="section-intro lang-en">The current solution is local. The cloud architecture is under design and has not been deployed or connected to this host.</p></div>
           <div class="architecture-grid">
             <article class="architecture-card architecture-current">
               <div class="architecture-card-top"><span class="architecture-number">A</span><span class="status-pill status-implemented"><span class="status-led" aria-hidden="true"></span><span class="lang-es">Actual · implementado</span><span class="lang-en">Current · implemented</span></span></div>
@@ -284,7 +344,7 @@ const docs = [
 
       <section class="section section-border" id="incidents" aria-labelledby="incidents-title">
         <div class="container">
-          <div class="section-heading"><div><p class="section-index">04 / INCIDENT LIFECYCLE</p><h2 id="incidents-title"><span class="lang-es">Del síntoma a la recuperación</span><span class="lang-en">From signal to recovery</span></h2></div><p class="section-intro lang-es">La simulación controlada verifica el flujo de reglas y notificaciones, sin presentar tiempos como un SLO de producción.</p><p class="section-intro lang-en">Controlled simulations validate alert and notification flow without presenting timings as a production SLO.</p></div>
+          <div class="section-heading"><div><p class="section-index">05 / INCIDENT LIFECYCLE</p><h2 id="incidents-title"><span class="lang-es">Del síntoma a la recuperación</span><span class="lang-en">From signal to recovery</span></h2></div><p class="section-intro lang-es">La simulación controlada verifica el flujo de reglas y notificaciones, sin presentar tiempos como un SLO de producción.</p><p class="section-intro lang-en">Controlled simulations validate alert and notification flow without presenting timings as a production SLO.</p></div>
           <ol class="incident-lifecycle">
             <li><span class="lifecycle-index">01</span><strong>NORMAL</strong><p class="lang-es">Métricas dentro de umbral</p><p class="lang-en">Metrics within thresholds</p></li>
             <li><span class="lifecycle-index">02</span><strong>PENDING</strong><p class="lang-es">Condición sostenida</p><p class="lang-en">Condition sustained</p></li>
@@ -298,7 +358,7 @@ const docs = [
 
       <section class="section section-border" id="delivery" aria-labelledby="delivery-title">
         <div class="container">
-          <div class="section-heading"><div><p class="section-index">05 / CI &amp; DELIVERY</p><h2 id="delivery-title"><span class="lang-es">Validaciones en GitHub Actions</span><span class="lang-en">GitHub Actions validation</span></h2></div><p class="section-intro lang-es">Ejecución remota consultada para el commit de `main` que etiqueta v1.0.0. No valida esta rama local todavía.</p><p class="section-intro lang-en">Remote run checked for the `main` commit tagged v1.0.0. It does not validate this local branch yet.</p></div>
+          <div class="section-heading"><div><p class="section-index">06 / CI &amp; DELIVERY</p><h2 id="delivery-title"><span class="lang-es">Validaciones en GitHub Actions</span><span class="lang-en">GitHub Actions validation</span></h2></div><p class="section-intro lang-es">Ejecución remota consultada para el commit de `main` que etiqueta v1.0.0. No valida esta rama local todavía.</p><p class="section-intro lang-en">Remote run checked for the `main` commit tagged v1.0.0. It does not validate this local branch yet.</p></div>
           <div class="ci-banner"><div class="ci-banner-icon" aria-hidden="true">✓</div><div><span class="ci-banner-label"><span class="lang-es">EJECUCIÓN REAL VERIFICADA · MAIN</span><span class="lang-en">REAL RUN VERIFIED · MAIN</span></span><strong>3e847f5 · 24 Oct 2026</strong><p class="lang-es">Los cuatro jobs finalizaron con éxito en GitHub Actions.</p><p class="lang-en">All four jobs completed successfully in GitHub Actions.</p></div><a class="button button-outline" href={ciRun} target="_blank" rel="noreferrer noopener"><span class="lang-es">Ver ejecución</span><span class="lang-en">View run</span><span aria-hidden="true">↗</span></a></div>
           <div class="job-grid">
             {jobs.map((job, index) => (
@@ -311,7 +371,7 @@ const docs = [
 
       <section class="section section-border" id="security" aria-labelledby="security-title">
         <div class="container">
-          <div class="section-heading"><div><p class="section-index">06 / SECURITY BY DESIGN</p><h2 id="security-title"><span class="lang-es">Los límites también son arquitectura</span><span class="lang-en">Security boundaries are architecture</span></h2></div><p class="section-intro lang-es">El laboratorio está aislado para aprendizaje. Una ruta de observación no debe convertirse en una API de administración expuesta.</p><p class="section-intro lang-en">The lab is isolated for learning. An observation path must not become an exposed administration API.</p></div>
+          <div class="section-heading"><div><p class="section-index">07 / SECURITY BY DESIGN</p><h2 id="security-title"><span class="lang-es">Los límites también son arquitectura</span><span class="lang-en">Security boundaries are architecture</span></h2></div><p class="section-intro lang-es">El laboratorio está aislado para aprendizaje. Una ruta de observación no debe convertirse en una API de administración expuesta.</p><p class="section-intro lang-en">The lab is isolated for learning. An observation path must not become an exposed administration API.</p></div>
           <div class="security-grid">
             <article class="security-card"><span class="security-symbol">01</span><h3><span class="lang-es">Sin socket en contenedores</span><span class="lang-en">No socket in containers</span></h3><p class="lang-es">Ningún servicio recibe `/var/run/docker.sock`. El exporter host-side usa Docker CLI, pero su usuario mantiene facultades importantes sobre el daemon.</p><p class="lang-en">No service receives `/var/run/docker.sock`. The host-side exporter uses Docker CLI, while its user retains significant daemon privileges.</p></article>
             <article class="security-card"><span class="security-symbol">02</span><h3><span class="lang-es">Redes y alcance privados</span><span class="lang-en">Private network scope</span></h3><p class="lang-es">Prometheus, Alertmanager, exporters y webhook no son servicios públicos. La red local de Docker Desktop no equivale a un firewall de aplicación.</p><p class="lang-en">Prometheus, Alertmanager, exporters, and webhook are not public services. Docker Desktop networking is not an application firewall.</p></article>
@@ -324,7 +384,7 @@ const docs = [
 
       <section class="section section-border" id="roadmap" aria-labelledby="roadmap-title">
         <div class="container roadmap-section">
-          <div class="section-heading"><div><p class="section-index">07 / ROADMAP</p><h2 id="roadmap-title"><span class="lang-es">Progreso con evidencia</span><span class="lang-en">Evidence-led progress</span></h2></div><p class="section-intro lang-es">La fase cloud se prepara en esta rama local. La etiqueta “planned” describe el despliegue, no una infraestructura online.</p><p class="section-intro lang-en">Cloud work is being prepared on this local branch. “Planned” describes deployment status, not online infrastructure.</p></div>
+          <div class="section-heading"><div><p class="section-index">08 / ROADMAP</p><h2 id="roadmap-title"><span class="lang-es">Progreso con evidencia</span><span class="lang-en">Evidence-led progress</span></h2></div><p class="section-intro lang-es">La fase cloud se prepara en esta rama local. La etiqueta “planned” describe el despliegue, no una infraestructura online.</p><p class="section-intro lang-en">Cloud work is being prepared on this local branch. “Planned” describes deployment status, not online infrastructure.</p></div>
           <div class="roadmap-grid">
             <div class="roadmap-item"><span class="roadmap-check" aria-hidden="true">✓</span><div><strong>Fase 1–2</strong><span class="lang-es">Prometheus, Grafana, alertas y registro de incidentes</span><span class="lang-en">Prometheus, Grafana, alerts, and incident logging</span></div><span class="status-pill status-implemented"><span class="lang-es">Completa</span><span class="lang-en">Complete</span></span></div>
             <div class="roadmap-item"><span class="roadmap-check" aria-hidden="true">✓</span><div><strong>Fase 3B</strong><span class="lang-es">Exporter local host-side, sin socket dentro de contenedores</span><span class="lang-en">Local host-side exporter, no container socket mount</span></div><span class="status-pill status-implemented"><span class="lang-es">Completa</span><span class="lang-en">Complete</span></span></div>
@@ -346,8 +406,20 @@ const docs = [
     </footer>
 
     <dialog class="image-dialog" id="image-viewer" aria-label="Visor de capturas">
-      <div class="dialog-toolbar"><p id="viewer-caption" class="dialog-caption"></p><button class="dialog-close" type="button" data-close-image data-aria-es="Cerrar visor de capturas" data-aria-en="Close screenshot viewer" aria-label="Cerrar visor de capturas">×</button></div>
-      <img id="viewer-image" src="" alt="" />
+      <div class="dialog-toolbar">
+        <p id="viewer-caption" class="dialog-caption"></p>
+        <div class="dialog-zoom-controls" role="group" data-aria-es="Controles de ampliación" data-aria-en="Zoom controls" aria-label="Controles de ampliación">
+          <button type="button" data-zoom-out data-aria-es="Reducir zoom" data-aria-en="Zoom out" aria-label="Reducir zoom" title="−">−</button>
+          <output id="zoom-level" aria-live="polite" aria-atomic="true">1×</output>
+          <button type="button" data-zoom-in data-aria-es="Aumentar zoom" data-aria-en="Zoom in" aria-label="Aumentar zoom" title="+">+</button>
+          <button class="dialog-zoom-reset" type="button" data-zoom-reset data-aria-es="Restablecer zoom" data-aria-en="Reset zoom" aria-label="Restablecer zoom"><span class="lang-es">Restablecer</span><span class="lang-en">Reset</span></button>
+        </div>
+        <button class="dialog-close" type="button" data-close-image data-aria-es="Cerrar visor de capturas" data-aria-en="Close screenshot viewer" aria-label="Cerrar visor de capturas">×</button>
+      </div>
+      <div class="image-viewport" id="viewer-viewport" role="region" tabindex="0" aria-describedby="viewer-zoom-help" aria-keyshortcuts="Shift+Equal - 0" data-aria-es="Vista de la captura. Usa más, menos o cero para controlar el zoom; doble toque alterna entre 1× y 2×." data-aria-en="Screenshot view. Use plus, minus, or zero to control zoom; double-tap toggles between 1× and 2×." aria-label="Vista de la captura">
+        <img id="viewer-image" src="" alt="" draggable="false" />
+      </div>
+      <p class="visually-hidden" id="viewer-zoom-help"><span class="lang-es">Usa los botones para ampliar o reducir. También puedes pulsar +, − o 0; en pantallas táctiles, el doble toque alterna entre 1× y 2×.</span><span class="lang-en">Use the buttons to zoom in or out. You can also press +, −, or 0; on touch screens, double-tap toggles between 1× and 2×.</span></p>
     </dialog>
 
     <script>
