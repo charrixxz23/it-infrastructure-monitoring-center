@@ -86,7 +86,15 @@ Los dos dashboards se leen desde config/grafana/dashboards/ mediante el proveedo
 
 ![Docker Container Monitoring with exporter UP, collection OK, and five observed containers](screenshots/02-docker-container-monitoring.png)
 
-Las imágenes son capturas auténticas del estado en el momento de la captura. Se normalizaron los nombres de archivo; los bytes de las seis PNG permanecen idénticos.
+### Home Network Monitoring
+
+**ES:** Evidencia auténtica de cinco sondas de red doméstica y Blackbox Exporter saludable. Es una captura estática: el portal no presenta métricas en vivo ni publica los targets privados.
+
+**EN:** Authentic evidence of five home-network probes and a healthy Blackbox Exporter. This is a static screenshot; the site does not show live metrics or publish private targets.
+
+![Home Network Monitoring with five probes and healthy Blackbox Exporter; static evidence](screenshots/07-home-network-monitoring.png)
+
+Las capturas son evidencia auténtica de sus respectivos instantes. Las seis imágenes originales de la galería se mantienen idénticas; la captura de red doméstica se añadió como séptima evidencia sin alterar sus píxeles.
 
 ### Consultas representativas
 
