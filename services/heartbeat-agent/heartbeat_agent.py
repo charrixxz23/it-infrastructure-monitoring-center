@@ -23,6 +23,7 @@ LOGGER = logging.getLogger("itmc.heartbeat")
 USER_AGENT = "itmc-external-heartbeat/1.0"
 DEFAULT_PING_URL_FILE = Path("/run/secrets/healthchecks_ping_url")
 PING_URL_HOST = "hc-ping.com"
+HEALTH_BIND_HOST = "127.0.0.1"
 PING_UUID_PATH = re.compile(
     r"/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
     r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\Z"
@@ -310,6 +311,13 @@ def _healthcheck_local(port: int) -> int:
         return 1
 
 
+def create_health_server(state: AgentState, port: int) -> ThreadingHTTPServer:
+    """Expose health only to the agent process, not attached network peers."""
+    return ThreadingHTTPServer(
+        (HEALTH_BIND_HOST, port), make_health_handler(state)
+    )
+
+
 class StopEvent(Protocol):
     """Protocol-shaped alias for threading.Event, useful for type readability."""
 
@@ -370,9 +378,7 @@ def run_agent(settings: Settings) -> None:
     stop_event = threading.Event()
     install_signal_handlers(stop_event)
 
-    server = ThreadingHTTPServer(
-        ("0.0.0.0", settings.health_port), make_health_handler(state)
-    )
+    server = create_health_server(state, settings.health_port)
     server.daemon_threads = True
     server_thread = threading.Thread(
         target=server.serve_forever, name="heartbeat-health", daemon=True

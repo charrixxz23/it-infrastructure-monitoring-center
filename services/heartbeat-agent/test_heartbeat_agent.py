@@ -366,6 +366,13 @@ class HeartbeatAgentTests(unittest.TestCase):
         state.record_cycle(agent.CycleResult(False, ("Alertmanager:http_503",)))
         self.assertFalse(state.is_healthy())
 
+    def test_health_server_binds_only_to_container_loopback(self) -> None:
+        server = agent.create_health_server(agent.AgentState(60), 0)
+        try:
+            self.assertEqual(server.server_address[0], "127.0.0.1")
+        finally:
+            server.server_close()
+
 
 if __name__ == "__main__":
     unittest.main()

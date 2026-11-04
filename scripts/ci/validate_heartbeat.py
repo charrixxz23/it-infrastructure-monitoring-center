@@ -124,6 +124,8 @@ def validate_agent() -> list[str]:
             errors.append("agent is missing a required core service health endpoint")
     if 'PING_URL_HOST = "hc-ping.com"' not in source:
         errors.append("agent must validate the fixed Healthchecks.io Ping host")
+    if 'HEALTH_BIND_HOST = "127.0.0.1"' not in source:
+        errors.append("agent health endpoint must bind only to container loopback")
     if 'parsed.scheme != "https"' not in source or "NoRedirectHandler" not in source:
         errors.append("Ping URL must require HTTPS and reject redirects")
     if (

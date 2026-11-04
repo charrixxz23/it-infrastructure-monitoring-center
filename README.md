@@ -52,7 +52,7 @@
 | Blackbox Exporter | 0.28.0 (digest fijado) | Sondas ICMP, DNS y HTTPS para monitoreo local de red |
 | Incident Logger | Python 3.13, biblioteca estándar | Webhook e historial local rotado |
 | Container Exporter | Python 3.10+, biblioteca estándar | Snapshot opcional de estadísticas Docker |
-| External Heartbeat | Python 3.13, biblioteca estándar | Dead-man's switch opt-in; no hay cuenta ni Ping URL real configurada |
+| External Heartbeat | Python 3.13, biblioteca estándar | Dead-man's switch opt-in; check creado manualmente, sin Ping URL local ni pings reales |
 
 ## Arquitectura y diagramas
 
@@ -70,7 +70,7 @@ El exporter de contenedores corre como proceso local de Windows, fuera de Docker
 
 El dashboard de infraestructura presenta KPIs, tendencias, salud de targets y capacidad de los volúmenes relevantes. Las métricas de CPU, memoria, red y uptime de Node Exporter describen el **Linux del motor Docker Desktop/WSL2**, no el Windows físico. Sus etiquetas distinguen el volumen compartido **Windows C:** (/mnt/host/c) del **Docker virtual disk** (/mnt/docker-desktop-disk).
 
-La integración opcional de external heartbeat está **preparada, pendiente de validación externa**. No se creó una cuenta/check de Healthchecks.io, no se configuró una Ping URL real y no se envían pings en CI. El agente cubre la salud HTTP de cuatro componentes del plano de monitoreo; no representa la disponibilidad de los destinos de red, Node Exporter ni el estado de cada target. Consulta el [diseño y evaluación de seguridad](docs/external-heartbeat.md) antes de cualquier activación.
+La integración opcional de external heartbeat está **preparada, pendiente de validación externa**. El propietario creó manualmente el proyecto y el check de Healthchecks.io, con período y grace de 2 minutos y notificación por correo; la Ping URL no está almacenada localmente ni montada y no se han enviado pings reales. CI usa transporte HTTP simulado. El agente cubre la salud HTTP de cuatro componentes del plano de monitoreo; no representa la disponibilidad de los destinos de red, Node Exporter ni el estado de cada target. Consulta el [diseño y evaluación de seguridad](docs/external-heartbeat.md) antes de cualquier activación.
 
 Los dos dashboards se leen desde config/grafana/dashboards/ mediante el proveedor de archivos en config/grafana/provisioning/dashboards/dashboard-provider.yml. Grafana los vuelve a cargar periódicamente; no es necesario importarlos a mano.
 
@@ -138,11 +138,11 @@ Consulta [arquitectura y seguridad](docs/home-network-monitoring.md), [runbook](
 
 ### External heartbeat — opt-in preparado
 
-**ES:** El agente queda desactivado en el Compose predeterminado. Comprueba Prometheus, Alertmanager, Grafana e Incident Logger y solo manda un ping de éxito tras cuatro respuestas saludables. No consulta las sondas domésticas ni envía datos de métricas. La validación del proveedor externo está pendiente; no se ha creado cuenta, check ni Ping URL.
+**ES:** El agente queda desactivado en el Compose predeterminado. Comprueba Prometheus, Alertmanager, Grafana e Incident Logger y solo manda un ping de éxito tras cuatro respuestas saludables. No consulta las sondas domésticas ni envía datos de métricas. El propietario ya creó manualmente el check externo y configuró el período/grace; la Ping URL todavía no está montada y no hay pings reales ni pruebas de pérdida/recuperación.
 
-**EN:** The agent remains disabled in the default Compose stack. It checks Prometheus, Alertmanager, Grafana, and Incident Logger and sends a success ping only after all four health checks pass. It does not inspect home probes or send metric data. External-provider validation is pending; no account, check, or Ping URL has been created.
+**EN:** The agent remains disabled in the default Compose stack. It checks Prometheus, Alertmanager, Grafana, and Incident Logger and sends a success ping only after all four health checks pass. It does not inspect home probes or send metric data. The owner manually created and configured the external check; the Ping URL is not mounted, and no real pings or missed-ping/recovery tests have been validated.
 
-See the [external heartbeat design](docs/external-heartbeat.md) and [activation and rollback runbook](docs/runbooks/external-heartbeat.md). Compose does not provide destination-level egress filtering; do not enable the service until the Docker Desktop outbound route has an approved firewall or proxy policy.
+See the [external heartbeat design](docs/external-heartbeat.md) and [activation and rollback runbook](docs/runbooks/external-heartbeat.md). Compose does not provide destination-level egress filtering. The current host audit found no outbound-deny policy for Windows Firewall or WSL Hyper-V, and no specific Docker Desktop backend egress rule. Do not enable the service unless the owner explicitly accepts unrestricted destination egress for this personal lab or an enforced destination-aware policy has been verified.
 
 ## Monitoreo y alertas
 
@@ -248,8 +248,8 @@ Con Docker Desktop activo, scripts/validate.ps1 comprueba el entorno local, las 
 - **Se eligió un exporter host-side en Python.** Usa Docker CLI desde Windows, filtra por etiqueta Compose y consulta snapshots de estadísticas. Ningún contenedor recibe el socket.
 - **El exporter sigue teniendo privilegios importantes.** El proceso hereda el acceso Docker del usuario; una modificación o vulnerabilidad podría abusar del daemon. Ejecuta solo código confiable y detén el proceso cuando no lo uses.
 - **Loopback y host.docker.internal tienen alcances distintos.** El proceso escucha solo en 127.0.0.1; Docker Desktop proxifica el camino desde la red de contenedores. Esa ruta no autentica al cliente y otros contenedores locales podrían leer el endpoint acotado.
-- **External heartbeat usa un destino fijo a nivel de aplicación, no de red.** La validación de URL acepta `https://hc-ping.com/<UUID>` y rechaza redirecciones; la bridge Compose no es una allowlist de salida. Un firewall/proxy del host debe imponer y verificarse como control real antes de activar. El Ping URL es un secreto bearer montado como archivo solo lectura.
-- **La evidencia del heartbeat aún no es una validación de proveedor.** Las pruebas usan HTTP simulado y Compose solo se renderiza; CI nunca envía pings. No hay cuenta, check ni Ping URL reales configurados.
+- **External heartbeat queda aislado del tráfico entrante.** No publica puertos al host y su endpoint de health se enlaza a `127.0.0.1` dentro del contenedor. Usa un destino fijo a nivel de aplicación, pero eso no es un control de red: Compose no ofrece una allowlist de egreso. Una política efectiva debe imponerse y verificarse antes de activar. El Ping URL es un secreto bearer; cuando se active, se montará como archivo solo lectura.
+- **La evidencia del heartbeat aún no es una validación de proveedor.** El check externo fue creado manualmente, pero la Ping URL no está montada; las pruebas usan HTTP simulado, Compose solo se renderiza y CI nunca envía pings. No hay evidencia de pings, notificación de pérdida ni recuperación.
 - **No es monitoreo del Windows físico.** Node Exporter mide el Linux visible al daemon. Para CPU/RAM del host Windows haría falta instrumentación específica de Windows, fuera del alcance actual.
 - Laboratorio local sin TLS ni autenticación de producción para Prometheus/Alertmanager. Mantén sus interfaces ligadas a loopback.
 
