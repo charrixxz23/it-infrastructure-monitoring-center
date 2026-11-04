@@ -33,7 +33,7 @@
 
 ## Funcionalidades
 
-- Cinco servicios Compose existentes: Prometheus, Grafana, Node Exporter, Alertmanager e Incident Logger. Esta rama prepara un sexto servicio opcional, Blackbox Exporter, sin iniciarlo.
+- Observabilidad local con Prometheus, Grafana, Node Exporter, Alertmanager, Incident Logger y Blackbox Exporter para las sondas domésticas.
 - Aprovisionamiento de datasource y dashboards Grafana desde archivos versionados.
 - Métricas de CPU, memoria, filesystem, red, uptime y disponibilidad de targets.
 - Reglas de alerta y registro persistente, rotado y local de eventos FIRING/RESOLVED.
@@ -48,7 +48,7 @@
 | Grafana | 13.2.4 | Dashboards provisionados |
 | Node Exporter | 1.12.1 | Métricas del Linux visible al daemon |
 | Alertmanager | 0.34.1 | Agrupación y entrega de alertas |
-| Blackbox Exporter | 0.28.0 (digest fijado) | Sondas ICMP, DNS y HTTPS; integración doméstica aún no activada en el entorno local |
+| Blackbox Exporter | 0.28.0 (digest fijado) | Sondas ICMP, DNS y HTTPS para monitoreo local de red |
 | Incident Logger | Python 3.13, biblioteca estándar | Webhook e historial local rotado |
 | Container Exporter | Python 3.10+, biblioteca estándar | Snapshot opcional de estadísticas Docker |
 
@@ -94,7 +94,7 @@ Los dos dashboards se leen desde config/grafana/dashboards/ mediante el proveedo
 
 ![Home Network Monitoring with five probes and healthy Blackbox Exporter; static evidence](screenshots/07-home-network-monitoring.png)
 
-Las capturas son evidencia auténtica de sus respectivos instantes. Las seis imágenes originales de la galería se mantienen idénticas; la captura de red doméstica se añadió como séptima evidencia sin alterar sus píxeles.
+Las capturas son evidencia auténtica de sus respectivos instantes. Las seis imágenes originales de Grafana/Prometheus/GitHub Actions y la captura 07 de Home Network Monitoring se conservan sin alteración. La captura 08 de Telegram es un recorte exacto de la imagen original: presenta solo la prueba sintética warning FIRING → RESOLVED; no se retocaron sus píxeles ni los valores.
 
 ### Consultas representativas
 
@@ -130,7 +130,7 @@ El dashboard Docker consulta métricas itmc_container_*; sus agregados se limita
 
 Este dashboard independiente sondea el router local configurado en un archivo ignorado por Git y los destinos aprobados `1.1.1.1` y `example.com`. DNS consulta A/AAAA de `example.com` directamente al resolver aprobado; HTTPS usa el hostname y su resolución depende de Docker Desktop, sin seguir redirecciones a otros hosts. En la validación operativa de esta rama, las cinco sondas configuradas y el scrape de Blackbox devolvieron muestras recientes exitosas. El historial solo comienza con la configuración activa y no representa disponibilidad anterior. `up` describe el scrape del exporter/endpoint; `probe_success` describe el resultado de una sonda. Una alerta `BlackboxExporterDown` indica una interrupción de monitorización y no demuestra una caída del ISP. Consulta el [runbook](docs/runbooks/home-network.md) y el [postmortem redactado de preparación](docs/incidents/blackbox-exporter-preparation.md). Windows y Docker Desktop/WSL2 deben permanecer encendidos para mantener la observación continua.
 
-Consulta [arquitectura y seguridad](docs/home-network-monitoring.md), [runbook](docs/runbooks/home-network.md), [notificaciones](docs/home-network-notifications.md) y [plantilla de postmortem](docs/templates/home-network-postmortem.md) antes de activarlo. Windows y Docker Desktop/WSL2 deben permanecer encendidos para mantener la observación continua.
+Consulta [arquitectura y seguridad](docs/home-network-monitoring.md), [runbook](docs/runbooks/home-network.md), [notificaciones](docs/home-network-notifications.md) y [plantilla de postmortem](docs/templates/home-network-postmortem.md) para operar el monitoreo local. Windows y Docker Desktop/WSL2 deben permanecer encendidos para mantener la observación continua.
 
 ## Monitoreo y alertas
 
@@ -140,9 +140,19 @@ La captura de reglas muestra las cuatro reglas de infraestructura y TestIncident
 
 La captura de Alertmanager muestra **No alert groups found**. En ese momento no había grupos de alertas activos/recibidos para mostrar. Esto es coherente con el estado normal de las reglas y no indica por sí solo un fallo de Alertmanager.
 
+### Telegram — prueba de ciclo FIRING → RESOLVED
+
+**ES:** Se verificó localmente una alerta doméstica sintética `HomeRouterUnavailable` de severidad `warning`: Alertmanager entregó FIRING y RESOLVED al bot privado y el Incident Logger conservó ambos eventos. La captura es evidencia recortada de esa prueba controlada; no representa una caída real del router ni del ISP. La notificación Telegram es opt-in en instalaciones nuevas y esta prueba no demuestra servicio continuo.
+
+**EN:** A synthetic `HomeRouterUnavailable` warning was validated locally: Alertmanager delivered FIRING and RESOLVED to a private bot, and the Incident Logger retained both events. The cropped screenshot is evidence of that controlled test; it does not represent a real router or ISP outage. Telegram remains opt-in for new installations, and this test does not establish continuous service.
+
+![Sanitized Telegram screenshot showing the synthetic warning FIRING and RESOLVED notifications](screenshots/08-telegram-alerting.png)
+
+Consulta el [informe de validación de Fase 8](docs/phase-8-telegram-validation.md) para la evidencia, los tiempos observados, las limitaciones y el tratamiento de una pareja posterior de alertas críticas no correlacionadas.
+
 ## Evidencias
 
-Las siguientes cuatro capturas complementan las dos vistas de Grafana. Los enlaces abren los PNG originales sin edición:
+Estas capturas complementan las dos vistas de Grafana:
 
 | Evidencia | Español | English |
 |---|---|---|
@@ -150,6 +160,7 @@ Las siguientes cuatro capturas complementan las dos vistas de Grafana. Los enlac
 | [Reglas Prometheus](screenshots/04-prometheus-alert-rules.png) | Cuatro reglas de infraestructura y TestIncident inactivas en estado normal. | Four infrastructure rules and TestIncident inactive while the system is normal. |
 | [Alertmanager](screenshots/05-alertmanager-no-active-groups.png) | Sin grupos activos en el instante de la captura. | No active groups at capture time. |
 | [GitHub Actions CI](screenshots/06-github-actions-ci.png) | Ejecución #4 exitosa; los cuatro jobs aparecen en verde. | Successful run #4; all four jobs are green. |
+| [Telegram FIRING → RESOLVED](screenshots/08-telegram-alerting.png) | Recorte auténtico de la prueba sintética warning; no es una caída de red real. | Authentic crop of the synthetic warning test; not a real network outage. |
 | [Detalle de la ejecución CI #4](https://github.com/charrixxz23/it-infrastructure-monitoring-center/actions/runs/40109656359) | Registro remoto de GitHub Actions. | GitHub Actions run details. |
 
 ## GitHub Actions
@@ -187,7 +198,7 @@ docker compose up -d
 docker compose ps
 ~~~
 
-En esta rama, `docker compose up -d` activa las sondas ICMP/DNS/HTTPS definidas. No ejecutes ese comando para activar esta función hasta revisar el [runbook](docs/runbooks/home-network.md); la integración no se ha iniciado en esta entrega.
+En una instalación limpia, configura primero el archivo de targets local ignorado por Git y revisa el [runbook](docs/runbooks/home-network.md) antes de iniciar las sondas con Compose. La validación doméstica descrita aquí se realizó localmente; el portal no está conectado a esos servicios.
 
 Accesos locales: [Grafana](http://127.0.0.1:3000), [Prometheus](http://127.0.0.1:9090) y [Alertmanager](http://127.0.0.1:9093). Usa las credenciales que configures localmente en .env; el repositorio no publica credenciales.
 
@@ -233,7 +244,8 @@ Con Docker Desktop activo, scripts/validate.ps1 comprueba el entorno local, las 
 - [Exporter Docker local](docs/container-exporter.md)
 - [Home Network Monitoring: arquitectura, seguridad y activación](docs/home-network-monitoring.md)
 - [Runbook de red doméstica](docs/runbooks/home-network.md)
-- [Plan de notificaciones (Telegram evaluado, no configurado)](docs/home-network-notifications.md)
+- [Operación de notificaciones Telegram](docs/home-network-notifications.md)
+- [Validación local del ciclo Telegram de Fase 8](docs/phase-8-telegram-validation.md)
 - [Plantilla de postmortem doméstico](docs/templates/home-network-postmortem.md)
 - [Informe redactado del incidente de preparación de Blackbox](docs/incidents/blackbox-exporter-preparation.md)
 - [Evaluación de seguridad de cAdvisor](docs/container-monitoring-assessment.md)
@@ -241,11 +253,11 @@ Con Docker Desktop activo, scripts/validate.ps1 comprueba el entorno local, las 
 - [Troubleshooting](docs/troubleshooting.md)
 - [Resultados de validación resumidos](docs/verification-results.md)
 
-## Fase 5 — Preparación cloud (Planned / In Development)
+## Portal público y plan cloud
 
-**ES:** La rama `feature/free-cloud-deployment` prepara localmente un portal estático para Cloudflare Pages y documenta una posible migración ARM64 a OCI Always Free. No se han creado cuentas ni recursos cloud, configurado DNS o desplegado servicios. El laboratorio existente no cambia.
+**ES:** El portal estático de documentación y capturas está publicado en Cloudflare Pages. No consulta los servicios locales ni presenta métricas en vivo. La documentación de Oracle Cloud Infrastructure describe una posible arquitectura; no se han desplegado allí servicios de monitoreo.
 
-**EN:** The `feature/free-cloud-deployment` branch locally prepares a static Cloudflare Pages portfolio and documents a possible ARM64 migration to OCI Always Free. No cloud accounts or resources have been created, no DNS has been configured, and no services have been deployed. The existing lab remains unchanged.
+**EN:** The static documentation and screenshot portfolio is published on Cloudflare Pages. It does not query local services or display live metrics. Oracle Cloud Infrastructure documentation describes a possible architecture; no monitoring services have been deployed there.
 
 - [Portal estático](website/)
 - [Arquitectura y diagramas cloud](docs/cloud/architecture.md) · [diagramas Mermaid](docs/cloud/diagrams.md)

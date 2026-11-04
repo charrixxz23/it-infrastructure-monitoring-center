@@ -1,6 +1,6 @@
 # Evidencia visual
 
-Las seis imágenes originales de la galería y la captura adicional de Home Network Monitoring son PNG auténticas entregadas para esta documentación. Se revisaron visualmente y se verificaron sus dimensiones y chunks de metadata. Solo se normalizaron los nombres de las seis originales; sus hashes SHA-256 antes y después de renombrar coinciden. La captura adicional se conserva byte a byte, sin modificar sus datos.
+Las seis imágenes originales de la galería y la captura 07 de Home Network Monitoring son PNG auténticas. La evidencia 08 también parte de una captura auténtica: se recortó para incluir únicamente dos mensajes de la prueba sintética warning. El recorte preserva sin retoque los píxeles seleccionados de la imagen original; sus dos copias (aquí y en `website/public/screenshots/`) tienen el mismo SHA-256 y no contienen campos de metadata PNG.
 
 ## Dashboards de Grafana
 
@@ -19,6 +19,14 @@ Las dos imágenes principales se muestran en el [README](../README.md). Los valo
 
 La imagen se muestra en su propia sección del portal Astro mediante el visor accesible existente. El portal es estático y no consulta el entorno doméstico.
 
+## Telegram — ciclo de alerta
+
+| Archivo | Dimensiones | Español | English |
+|---|---:|---|---|
+| [08-telegram-alerting.png](08-telegram-alerting.png) | 555 × 235 | Recorte de una captura auténtica con FIRING y RESOLVED para una alerta doméstica sintética `warning`; horas visibles 08:19 y 08:24 del 4 de noviembre de 2026 (hora de Panamá). No representa una caída real de red. | Crop from an authentic screenshot showing FIRING and RESOLVED for a synthetic home-network `warning` alert; visible times are 08:19 and 08:24 on 4 November 2026 (Panama local time). It does not represent a real network outage. |
+
+El recorte se hizo para excluir el encabezado de la cuenta, mensajes ajenos a la prueba y las notificaciones críticas posteriores cuya causa no fue correlacionada. Los valores de los dos mensajes visibles no se editaron. La captura se integra en el portal con el visor accesible existente.
+
 ## Otras evidencias
 
 | Archivo | Dimensiones | Español | English |
@@ -32,10 +40,10 @@ El estado 2/2 de Infrastructure Overview es intencional: ese KPI incluye Prometh
 
 ## Revisión visual y privacidad
 
-- No se observaron credenciales, contraseñas, tokens, rutas personales de Windows ni datos de incidentes.
-- Las PNG no contienen chunks de texto de metadata.
+- No se observan credenciales, contraseñas, tokens, chat ID, rutas personales de Windows, direcciones domésticas, MAC ni SSID.
+- La nueva PNG 08 no contiene campos de metadata; el crop coincide píxel por píxel con la región seleccionada de la fuente. La copia del sitio es idéntica a la de esta carpeta.
 - La captura Docker muestra nombres de servicios e IDs cortos efímeros de contenedor. No son credenciales, pero son identificadores operativos visibles en un repositorio público.
 - La captura de GitHub Actions muestra el nombre público de la cuenta y del repositorio. El repositorio es público por decisión de su propietario.
-- No se retocaron, recortaron ni reconstruyeron los valores o los píxeles de las imágenes.
+- Las seis capturas originales y la captura 07 no se alteraron. Solo la captura 08 está recortada; no se retocaron ni reconstruyeron los píxeles o valores que muestra.
 
 Si en una actualización futura se reemplaza una captura, repite la revisión visual y de privacidad antes de enlazarla. No guardes en esta carpeta .env, reportes/exportaciones de data/, logs, archivos HAR ni tokens.
