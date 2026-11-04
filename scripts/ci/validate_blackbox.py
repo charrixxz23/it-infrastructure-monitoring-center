@@ -58,6 +58,87 @@ DOCUMENTATION_NETWORKS = tuple(
     ipaddress.ip_network(network)
     for network in ("192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24")
 )
+# Exact, path-scoped literals for the public heartbeat design and its synthetic
+# tests. These do not exempt arbitrary RFC1918 values: any other non-public
+# address in a Git candidate remains a privacy error.
+SAFE_NONPUBLIC_IPV4_LITERALS_BY_FILE = {
+    "compose.heartbeat.yaml": frozenset(
+        {"172.31.255.248", "172.31.255.250", "172.31.255.251"}
+    ),
+    "config/heartbeat/squid.conf": frozenset(
+        {
+            "10.0.0.0",
+            "100.64.0.0",
+            "169.254.0.0",
+            "172.16.0.0",
+            "172.31.255.250",
+            "172.31.255.251",
+            "192.0.0.0",
+            "192.168.0.0",
+            "198.18.0.0",
+            "224.0.0.0",
+            "240.0.0.0",
+        }
+    ),
+    "scripts/ci/validate_heartbeat.py": frozenset(
+        {
+            "10.0.0.0",
+            "100.64.0.0",
+            "169.254.0.0",
+            "172.16.0.0",
+            "172.31.255.248",
+            "172.31.255.250",
+            "172.31.255.251",
+            "192.0.0.0",
+            "192.168.0.0",
+            "198.18.0.0",
+            "224.0.0.0",
+            "240.0.0.0",
+        }
+    ),
+    "scripts/ci/validate_blackbox.py": frozenset(
+        {
+            "10.0.0.0",
+            "100.64.0.0",
+            "169.254.0.0",
+            "169.254.1.2",
+            "172.16.0.0",
+            "172.20.0.10",
+            "172.20.0.11",
+            "172.20.0.12",
+            "172.20.0.13",
+            "172.20.0.20",
+            "172.20.0.21",
+            "172.20.0.22",
+            "172.20.0.23",
+            "172.31.255.248",
+            "172.31.255.250",
+            "172.31.255.251",
+            "192.0.0.0",
+            "192.168.0.0",
+            "198.18.0.0",
+            "224.0.0.0",
+            "240.0.0.0",
+        }
+    ),
+    "services/heartbeat-agent/heartbeat_agent.py": frozenset({"172.31.255.250"}),
+    "services/heartbeat-agent/heartbeat_entrypoint.py": frozenset(
+        {"10.0.0.0", "172.16.0.0", "172.31.255.250", "192.168.0.0"}
+    ),
+    "services/heartbeat-agent/test_heartbeat_entrypoint.py": frozenset(
+        {
+            "169.254.1.2",
+            "172.20.0.10",
+            "172.20.0.11",
+            "172.20.0.12",
+            "172.20.0.13",
+            "172.20.0.20",
+            "172.20.0.21",
+            "172.20.0.22",
+            "172.20.0.23",
+        }
+    ),
+}
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -417,10 +498,16 @@ def check_candidate_ip_privacy() -> list[str]:
             content = path.read_bytes().decode("utf-8")
         except (OSError, UnicodeDecodeError):
             continue
+        relative_path = path.relative_to(ROOT).as_posix()
+        safe_literals = SAFE_NONPUBLIC_IPV4_LITERALS_BY_FILE.get(
+            relative_path, frozenset()
+        )
         for match in IPV4_PATTERN.finditer(content):
-            address = ipaddress.ip_address(match.group())
+            literal = match.group()
+            address = ipaddress.ip_address(literal)
             if (
-                address.is_loopback
+                literal in safe_literals
+                or address.is_loopback
                 or address.is_unspecified
                 or address.is_global
                 or address in allowed_public
