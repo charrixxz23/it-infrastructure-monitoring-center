@@ -23,6 +23,7 @@ LOGGER = logging.getLogger("itmc.heartbeat")
 USER_AGENT = "itmc-external-heartbeat/1.0"
 DEFAULT_PING_URL_FILE = Path("/run/secrets/healthchecks_ping_url")
 PING_URL_HOST = "hc-ping.com"
+EXTERNAL_PROXY_URL = "http://172.31.255.250:3128"
 HEALTH_BIND_HOST = "127.0.0.1"
 PING_UUID_PATH = re.compile(
     r"/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
@@ -140,7 +141,28 @@ OpenResponse = Callable[[urllib.request.Request, float], object]
 def open_without_redirects(
     request: urllib.request.Request, timeout: float
 ) -> object:
-    opener = urllib.request.build_opener(NoRedirectHandler())
+    # An explicit empty proxy map prevents environment-proxy inheritance for
+    # internal Compose service checks.
+    opener = urllib.request.build_opener(
+        urllib.request.ProxyHandler({}), NoRedirectHandler()
+    )
+    return opener.open(request, timeout=timeout)
+
+
+class MandatoryProxyHandler(urllib.request.ProxyHandler):
+    """Use the configured proxy even if a no_proxy environment value exists."""
+
+    def proxy_bypass(self, host: str) -> bool:
+        return False
+
+
+def open_via_required_proxy(
+    request: urllib.request.Request, timeout: float
+) -> object:
+    proxy = MandatoryProxyHandler(
+        {"http": EXTERNAL_PROXY_URL, "https": EXTERNAL_PROXY_URL}
+    )
+    opener = urllib.request.build_opener(proxy, NoRedirectHandler())
     return opener.open(request, timeout=timeout)
 
 
@@ -151,8 +173,13 @@ class RequestResult:
 
 
 class HttpClient:
-    def __init__(self, open_response: OpenResponse = open_without_redirects) -> None:
-        self._open_response = open_response
+    def __init__(
+        self,
+        internal_open_response: OpenResponse = open_without_redirects,
+        external_open_response: OpenResponse = open_via_required_proxy,
+    ) -> None:
+        self._internal_open_response = internal_open_response
+        self._external_open_response = external_open_response
 
     @staticmethod
     def _request(url: str, method: str) -> urllib.request.Request:
@@ -171,7 +198,7 @@ class HttpClient:
     ) -> RequestResult:
         request = self._request(check.url, "GET")
         try:
-            with self._open_response(request, timeout) as response:
+            with self._internal_open_response(request, timeout) as response:
                 if response.status != 200:
                     return RequestResult(False, f"http_{response.status}")
             return RequestResult(True, "ok")
@@ -190,7 +217,7 @@ class HttpClient:
     def send_success_ping(self, ping_url: str, timeout: float) -> RequestResult:
         request = self._request(ping_url, "GET")
         try:
-            with self._open_response(request, timeout) as response:
+            with self._external_open_response(request, timeout) as response:
                 if response.status != 200:
                     return RequestResult(False, f"http_{response.status}")
                 # Healthchecks.io can use HTTP 200 for not-found/rate-limit replies.

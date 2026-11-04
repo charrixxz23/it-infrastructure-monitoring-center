@@ -1,6 +1,6 @@
 # Runbook — optional external heartbeat
 
-**Current state:** disabled. The owner reports that a Healthchecks.io project and check `ITMC - Monitoring Heartbeat` were created manually with a 2-minute period, 2-minute grace time, and email notification. The Ping URL is not stored locally or mounted into Docker. No real ping, missed-heartbeat notification, or recovery test has been validated. Do not treat unit tests or Compose rendering as external validation.
+**Current state:** disabled. Option B (agent namespace firewall plus a dedicated Squid proxy) is implemented in the draft PR. Isolated runtime checks verified the agent-side deny policy, service-IP refresh, and Squid rejection behavior; they did not verify that Docker Desktop/WSL2 host egress is constrained to the provider. The owner reports that the Healthchecks.io project/check exists with a 2-minute period, 2-minute grace, and email notification. The Ping URL is not stored locally or mounted into Docker. No real ping, missed-heartbeat notification, or recovery test has been validated. Do not activate until the proxy uplink boundary is verified and reviewed.
 
 ## Prerequisites and scope
 
@@ -10,7 +10,7 @@ Windows, Docker Desktop/WSL2, the agent, and Internet connectivity must be avail
 
 ## Future setup — do not run during CI or review
 
-Before handling the Ping URL, decide and document the egress policy. The current host audit found no outbound-deny policy for Windows Firewall or WSL Hyper-V and no outbound application-filter rule for Docker Desktop's backend. Docker Engine proxy settings are configured, but that alone does not show that runtime container traffic is forced through an enforcing proxy. The Compose bridge is ordinary NAT egress, not a destination allowlist. Either record explicit owner acceptance of unrestricted destination egress for this personal lab (Option A in the design document), or implement and verify an enforced destination-aware policy (Option B). If neither condition is met, do not copy or store the Ping URL and leave the agent disabled. Do not change host firewall rules as part of this runbook; rules on Docker Desktop's shared backend can affect other containers.
+Before handling the Ping URL, review the runtime isolation evidence for option B in `docs/external-heartbeat.md` and the PR. Agent-namespace bypass tests and Squid deny tests passed on a private-only test network, but the host audit found no outbound-deny policy for Windows Firewall or WSL Hyper-V and no outbound application-filter rule for Docker Desktop's backend. Docker Engine proxy settings do not prove enforcement. The agent's two networks are internal and the proxy uplink is separate, but a bridge by itself is not a destination allowlist. Do not activate until an effective restriction of the proxy uplink to the authorized destination is independently verified. Do not change host firewall rules as part of this runbook; rules on Docker Desktop's shared backend can affect other containers.
 
 1. The owner has already created the provider project and check, set to a 2-minute period and 2-minute grace time, with email notification enabled. Reconfirm the check and notification recipient through the authorized provider UI before activation. This repository does not contain the recipient address or check identifier.
 2. Copy the check's Ping URL without sending it to chat, a ticket, shell command arguments, screenshots, or source control. The URL grants permission to mark that check successful.
@@ -40,7 +40,7 @@ Before handling the Ping URL, decide and document the egress policy. The current
 
    Do not use `Get-Content`, `type`, `cat`, `Write-Host`, verbose shell tracing, or a screenshot to verify secret contents. Rotate the provider URL if its exposure is suspected.
 
-5. Confirm that the approved egress policy remains in force and the secret file inherits a reviewed ACL before rendering the override.
+5. Confirm that an independently verified host egress policy restricts the proxy uplink to the authorized provider, and that the secret file inherits a reviewed ACL, before rendering the override. The Compose bridge and the Squid ACL alone do not satisfy this host-side check.
 6. Render configuration without starting services:
 
    ```powershell
@@ -48,14 +48,15 @@ Before handling the Ping URL, decide and document the egress policy. The current
    ```
 
    This command validates Compose syntax and file existence; it does not contact Healthchecks.io. Verify Docker Desktop is ready and the four existing services are healthy before activation.
-7. Only after provider, ACL, and egress reviews are complete and the owner explicitly approves real pings, start just the opt-in service without starting dependencies. **Do not run this during the current PR review:**
+7. Only after option B's runtime evidence, provider configuration, ACL, and secret handling are reviewed and the owner explicitly approves real pings, start only the two opt-in services. **Do not run this during the current PR review:**
 
    ```powershell
+   docker compose -f compose.yaml -f compose.heartbeat.yaml up -d --no-deps heartbeat-egress-proxy
    docker compose -f compose.yaml -f compose.heartbeat.yaml up -d --no-deps heartbeat-agent
    docker compose -f compose.yaml -f compose.heartbeat.yaml ps heartbeat-agent
    ```
 
-   The application sends a real external success ping on a healthy cycle. Do not use the synthetic test URL.
+   These commands start no existing monitoring service. The agent has no direct uplink and waits for required internal endpoints and the proxy. On a healthy cycle it sends a real provider ping. Do not use a synthetic test URL for production activation.
 
 ## Observe and troubleshoot
 
@@ -76,10 +77,10 @@ Do not test by unplugging the router, disabling the firewall, stopping shared in
 Stop only the opt-in agent, using the same override so Compose identifies the service:
 
 ```powershell
-docker compose -f compose.yaml -f compose.heartbeat.yaml stop heartbeat-agent
+docker compose -f compose.yaml -f compose.heartbeat.yaml stop heartbeat-agent heartbeat-egress-proxy
 ```
 
-Remove the override from future commands. The default Compose stack remains unchanged. After stopping the agent, securely delete `.secrets/healthchecks-ping-url` if no longer needed and remove the provider-side check through its authorized UI if the owner wants to disable monitoring entirely. Do not delete shared monitoring volumes.
+This stops only the two opt-in services. Remove the override from future commands; the default stack and its networks remain unchanged. After stopping both services, securely delete `.secrets/healthchecks-ping-url` if no longer needed and remove the provider-side check through its authorized UI if the owner wants to disable monitoring entirely. Do not delete shared monitoring volumes.
 
 ## Ping URL compromise
 

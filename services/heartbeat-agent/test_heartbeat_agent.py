@@ -10,7 +10,7 @@ import urllib.error
 import urllib.request
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import heartbeat_agent as agent
 
@@ -55,9 +55,69 @@ def healthy_responses(count: int = 5) -> list[FakeResponse]:
 
 
 class HeartbeatAgentTests(unittest.TestCase):
+    def test_http_transports_override_environment_proxy_state(self) -> None:
+        built_opener = Mock()
+        built_opener.open.return_value = FakeResponse()
+        request = urllib.request.Request(PING_URL)
+
+        with patch.dict(
+            "os.environ",
+            {
+                "HTTP_PROXY": "http://unexpected-proxy.invalid:8080",
+                "HTTPS_PROXY": "http://unexpected-proxy.invalid:8080",
+                "NO_PROXY": "*",
+                "no_proxy": "*",
+            },
+        ):
+            with patch.object(
+                agent.urllib.request,
+                "build_opener",
+                return_value=built_opener,
+            ) as build:
+                agent.open_without_redirects(request, timeout=1)
+                internal_handlers = build.call_args.args
+                internal_proxy = next(
+                    item
+                    for item in internal_handlers
+                    if isinstance(item, urllib.request.ProxyHandler)
+                )
+                self.assertEqual(internal_proxy.proxies, {})
+
+                agent.open_via_required_proxy(request, timeout=1)
+                external_handlers = build.call_args.args
+                required_proxy = next(
+                    item
+                    for item in external_handlers
+                    if isinstance(item, agent.MandatoryProxyHandler)
+                )
+                self.assertEqual(
+                    required_proxy.proxies,
+                    {
+                        "http": agent.EXTERNAL_PROXY_URL,
+                        "https": agent.EXTERNAL_PROXY_URL,
+                    },
+                )
+                self.assertFalse(required_proxy.proxy_bypass("hc-ping.com"))
+
+    def test_proxy_failure_does_not_fall_back_to_direct_transport(self) -> None:
+        internal = ScriptedOpener(healthy_responses(4))
+        external = ScriptedOpener([OSError("synthetic proxy unavailable")])
+
+        result = agent.run_cycle(
+            agent.REQUIRED_CHECKS,
+            agent.HttpClient(internal, external),
+            PING_URL,
+            component_timeout=3,
+            ping_timeout=5,
+        )
+
+        self.assertEqual(result, agent.CycleResult(False, ("Healthchecks.io:network_error",)))
+        self.assertEqual(len(internal.requests), 4)
+        self.assertEqual(len(external.requests), 1)
+
     def test_all_required_components_and_external_ping_must_succeed(self) -> None:
         opener = ScriptedOpener(healthy_responses())
-        client = agent.HttpClient(opener)
+        client = agent.HttpClient(opener, opener)
 
         result = agent.run_cycle(
             agent.REQUIRED_CHECKS, client, PING_URL, component_timeout=3, ping_timeout=5
@@ -74,7 +134,7 @@ class HeartbeatAgentTests(unittest.TestCase):
 
         result = agent.run_cycle(
             agent.REQUIRED_CHECKS,
-            agent.HttpClient(opener),
+            agent.HttpClient(opener, opener),
             PING_URL,
             component_timeout=3,
             ping_timeout=5,
@@ -89,7 +149,7 @@ class HeartbeatAgentTests(unittest.TestCase):
 
         result = agent.run_cycle(
             agent.REQUIRED_CHECKS,
-            agent.HttpClient(opener),
+            agent.HttpClient(opener, opener),
             PING_URL,
             component_timeout=3,
             ping_timeout=5,
@@ -107,7 +167,7 @@ class HeartbeatAgentTests(unittest.TestCase):
                 opener = ScriptedOpener(responses)
                 result = agent.run_cycle(
                     agent.REQUIRED_CHECKS,
-                    agent.HttpClient(opener),
+                    agent.HttpClient(opener, opener),
                     PING_URL,
                     component_timeout=3,
                     ping_timeout=5,
@@ -119,14 +179,14 @@ class HeartbeatAgentTests(unittest.TestCase):
 
     def test_component_timeout_is_bounded(self) -> None:
         opener = ScriptedOpener([socket.timeout("slow local endpoint")])
-        result = agent.HttpClient(opener).check_component(agent.REQUIRED_CHECKS[0], 2.5)
+        result = agent.HttpClient(opener, opener).check_component(agent.REQUIRED_CHECKS[0], 2.5)
 
         self.assertEqual(result, agent.RequestResult(False, "timeout"))
         self.assertEqual(opener.timeouts, [2.5])
 
     def test_non_success_component_http_status_is_rejected(self) -> None:
         opener = ScriptedOpener([FakeResponse(503)])
-        result = agent.HttpClient(opener).check_component(agent.REQUIRED_CHECKS[1], 3)
+        result = agent.HttpClient(opener, opener).check_component(agent.REQUIRED_CHECKS[1], 3)
 
         self.assertEqual(result, agent.RequestResult(False, "http_503"))
 
@@ -134,7 +194,7 @@ class HeartbeatAgentTests(unittest.TestCase):
         opener = ScriptedOpener(
             [urllib.error.URLError(socket.gaierror("synthetic DNS failure"))]
         )
-        result = agent.HttpClient(opener).check_component(agent.REQUIRED_CHECKS[0], 3)
+        result = agent.HttpClient(opener, opener).check_component(agent.REQUIRED_CHECKS[0], 3)
 
         self.assertEqual(result, agent.RequestResult(False, "network_error"))
 
@@ -142,7 +202,7 @@ class HeartbeatAgentTests(unittest.TestCase):
         opener = ScriptedOpener([*healthy_responses(4), OSError("synthetic connection failure")])
         result = agent.run_cycle(
             agent.REQUIRED_CHECKS,
-            agent.HttpClient(opener),
+            agent.HttpClient(opener, opener),
             PING_URL,
             component_timeout=3,
             ping_timeout=5,
@@ -155,7 +215,7 @@ class HeartbeatAgentTests(unittest.TestCase):
         opener = ScriptedOpener([*healthy_responses(4), FakeResponse(200, b"not found")])
         result = agent.run_cycle(
             agent.REQUIRED_CHECKS,
-            agent.HttpClient(opener),
+            agent.HttpClient(opener, opener),
             PING_URL,
             component_timeout=3,
             ping_timeout=5,
@@ -168,7 +228,7 @@ class HeartbeatAgentTests(unittest.TestCase):
         opener = ScriptedOpener([*healthy_responses(4), error])
         result = agent.run_cycle(
             agent.REQUIRED_CHECKS,
-            agent.HttpClient(opener),
+            agent.HttpClient(opener, opener),
             PING_URL,
             component_timeout=3,
             ping_timeout=5,
@@ -180,7 +240,7 @@ class HeartbeatAgentTests(unittest.TestCase):
         opener = ScriptedOpener([*healthy_responses(4), socket.timeout("slow provider")])
         result = agent.run_cycle(
             agent.REQUIRED_CHECKS,
-            agent.HttpClient(opener),
+            agent.HttpClient(opener, opener),
             PING_URL,
             component_timeout=3,
             ping_timeout=5,
@@ -193,7 +253,7 @@ class HeartbeatAgentTests(unittest.TestCase):
         opener = ScriptedOpener([*healthy_responses(4), FakeResponse(302, b"OK")])
         result = agent.run_cycle(
             agent.REQUIRED_CHECKS,
-            agent.HttpClient(opener),
+            agent.HttpClient(opener, opener),
             PING_URL,
             component_timeout=3,
             ping_timeout=5,
@@ -248,7 +308,7 @@ class HeartbeatAgentTests(unittest.TestCase):
                 *healthy_responses(5),
             ]
         )
-        client = agent.HttpClient(opener)
+        client = agent.HttpClient(opener, opener)
 
         first = agent.run_cycle(agent.REQUIRED_CHECKS, client, PING_URL, 3, 5)
         second = agent.run_cycle(agent.REQUIRED_CHECKS, client, PING_URL, 3, 5)
@@ -266,7 +326,7 @@ class HeartbeatAgentTests(unittest.TestCase):
         )
         result = agent.run_cycle(
             agent.REQUIRED_CHECKS,
-            agent.HttpClient(opener),
+            agent.HttpClient(opener, opener),
             PING_URL,
             component_timeout=3,
             ping_timeout=5,
@@ -289,7 +349,7 @@ class HeartbeatAgentTests(unittest.TestCase):
         )
         result = agent.run_cycle(
             agent.REQUIRED_CHECKS[:1],
-            agent.HttpClient(opener),
+            agent.HttpClient(opener, opener),
             PING_URL,
             component_timeout=3,
             ping_timeout=5,
