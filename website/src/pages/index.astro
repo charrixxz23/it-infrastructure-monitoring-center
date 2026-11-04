@@ -92,6 +92,21 @@ const screenshots = [
     height: 1114,
     featured: false,
   },
+  {
+    src: "/screenshots/08-telegram-alerting.png",
+    number: "08",
+    titleEs: "Telegram · ciclo de alerta",
+    titleEn: "Telegram · alert lifecycle",
+    categoryEs: "Alertmanager · prueba local",
+    categoryEn: "Alertmanager · local test",
+    descriptionEs: "Una alerta sintética HomeRouterUnavailable llegó como FIRING y RESOLVED; Incident Logger conservó ambos eventos. Evidencia de una prueba local, no disponibilidad continua.",
+    descriptionEn: "A synthetic HomeRouterUnavailable alert arrived as FIRING and RESOLVED; Incident Logger retained both events. Evidence of a local test, not continuous availability.",
+    altEs: "Recorte de una captura auténtica de Telegram con los mensajes FIRING y RESOLVED de una alerta doméstica sintética de severidad warning.",
+    altEn: "Crop of an authentic Telegram screenshot showing FIRING and RESOLVED messages for a synthetic home-network warning alert.",
+    width: 555,
+    height: 235,
+    featured: false,
+  },
 ];
 
 const stack = [
@@ -123,6 +138,7 @@ const networkDocs = [
   { href: `${repositoryMain}/docs/runbooks/home-network.md`, labelEs: "Runbook técnico", labelEn: "Technical runbook" },
   { href: `${repositoryMain}/docs/incidents/blackbox-exporter-preparation.md`, labelEs: "Informe del incidente", labelEn: "Incident report" },
   { href: `${repositoryMain}/docs/templates/home-network-postmortem.md`, labelEs: "Plantilla de postmortem", labelEn: "Postmortem template" },
+  { href: `${repositoryMain}/docs/phase-8-telegram-validation.md`, labelEs: "Validación de Telegram", labelEn: "Telegram validation" },
   { href: `${repositoryMain}/config/grafana/dashboards/home-network-monitoring.json`, labelEs: "JSON del dashboard", labelEn: "Dashboard JSON" },
   { href: `${repositoryMain}/config/prometheus/rules/home-network.yml`, labelEs: "Reglas de alerta", labelEn: "Alert rules" },
 ];
@@ -243,7 +259,7 @@ const networkDocs = [
 
       <section class="section section-border" id="dashboards" aria-labelledby="dashboards-title">
         <div class="container">
-          <div class="section-heading"><div><p class="section-index">02 / DASHBOARD GALLERY</p><h2 id="dashboards-title"><span class="lang-es">Evidencia de observabilidad</span><span class="lang-en">Observability evidence</span></h2></div><p class="section-intro lang-es">Seis capturas auténticas del laboratorio. Los números reflejan el instante capturado; no son métricas actuales ni una demo cloud en vivo.</p><p class="section-intro lang-en">Six authentic lab screenshots. Values reflect their capture time; they are not current metrics or a live cloud demo.</p></div>
+          <div class="section-heading"><div><p class="section-index">02 / DASHBOARD GALLERY</p><h2 id="dashboards-title"><span class="lang-es">Evidencia de observabilidad</span><span class="lang-en">Observability evidence</span></h2></div><p class="section-intro lang-es">El portafolio reúne ocho capturas auténticas de dashboards y flujos operativos. Los números reflejan el instante capturado; no son métricas actuales ni una demo cloud en vivo.</p><p class="section-intro lang-en">The portfolio includes eight authentic screenshots of dashboards and operational flows. Values reflect their capture time; they are not current metrics or a live cloud demo.</p></div>
           <div class="gallery-grid">
             {screenshots.map((item, index) => (
               <article class:list={["gallery-card", item.featured && "gallery-featured"]}>
@@ -251,11 +267,11 @@ const networkDocs = [
                   <img src={item.src} alt={item.altEs} width={item.width} height={item.height} loading={index < 2 ? "eager" : "lazy"} decoding="async" />
                   <span class="image-open-mark" aria-hidden="true">↗</span>
                 </button>
-                <div class="gallery-copy"><div class="gallery-meta"><span class="lang-es">{item.categoryEs}</span><span class="lang-en">{item.categoryEn}</span><span>0{index + 1}</span></div><h3>{item.titleEs}</h3><p class="lang-es">{item.descriptionEs}</p><p class="lang-en">{item.descriptionEn}</p></div>
+                <div class="gallery-copy"><div class="gallery-meta"><span class="lang-es">{item.categoryEs}</span><span class="lang-en">{item.categoryEn}</span><span>{item.number ?? String(index + 1).padStart(2, "0")}</span></div><h3>{item.titleEs}</h3><p class="lang-es">{item.descriptionEs}</p><p class="lang-en">{item.descriptionEn}</p></div>
               </article>
             ))}
           </div>
-          <div class="gallery-footnote"><span class="footnote-mark" aria-hidden="true">↗</span><p class="lang-es">Las capturas provienen de `screenshots/` y se incluyen sin recorte ni alteración de datos. Usa el visor accesible para ampliarlas.</p><p class="lang-en">Screenshots come from `screenshots/` and are included without cropping or changing their data. Use the accessible viewer to inspect them.</p></div>
+          <div class="gallery-footnote"><span class="footnote-mark" aria-hidden="true">↗</span><p class="lang-es">Las capturas provienen de `screenshots/`. La evidencia 08 es un recorte exacto de la imagen auténtica para mostrar solo la prueba controlada; no se retocaron sus píxeles ni sus valores. Usa el visor accesible para ampliarlas.</p><p class="lang-en">Screenshots come from `screenshots/`. Evidence 08 is an exact crop of the authentic image to show only the controlled test; its pixels and values were not retouched. Use the accessible viewer to inspect them.</p></div>
         </div>
       </section>
 

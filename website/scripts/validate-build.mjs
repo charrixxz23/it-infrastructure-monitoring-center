@@ -21,6 +21,9 @@ assert.match(html, /Monitoreo de red real/, "the Spanish network heading should 
 assert.match(html, /BlackboxExporterDown/, "the preparation incident should be documented");
 assert.match(html, /25 min 15 s/, "the documented incident duration should be visible");
 assert.match(html, /data-image-src="\/screenshots\/07-home-network-monitoring\.png"/, "the authentic dashboard should use the accessible image viewer");
+assert.match(html, /data-image-src="\/screenshots\/08-telegram-alerting\.png"/, "the Telegram evidence should use the accessible image viewer");
+assert.match(html, /Telegram · ciclo de alerta/, "the Telegram lifecycle evidence should appear in the gallery");
+assert.match(html, /Incident Logger conservó ambos eventos/, "the local Telegram test should distinguish persisted incident records");
 assert.match(html, /data-image-alt-en="Authentic Home Network Monitoring dashboard screenshot/, "the dashboard viewer should have English alternative text");
 assert.match(html, /data-image-alt-es="Captura auténtica del dashboard Home Network Monitoring/, "the dashboard viewer should have Spanish alternative text");
 assert.match(html, /data-zoom-out/, "the screenshot viewer should include a zoom-out control");
@@ -55,6 +58,7 @@ const screenshotNames = [
   "05-alertmanager-no-active-groups.png",
   "06-github-actions-ci.png",
   "07-home-network-monitoring.png",
+  "08-telegram-alerting.png",
 ];
 for (const name of screenshotNames) {
   const original = await readFile(path.join(repositoryRoot, "screenshots", name));
@@ -74,6 +78,7 @@ const networkDocumentation = [
   "docs/home-network-monitoring.md",
   "docs/runbooks/home-network.md",
   "docs/incidents/blackbox-exporter-preparation.md",
+  "docs/phase-8-telegram-validation.md",
   "docs/templates/home-network-postmortem.md",
   "config/grafana/dashboards/home-network-monitoring.json",
   "config/prometheus/rules/home-network.yml",

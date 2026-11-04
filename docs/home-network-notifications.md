@@ -2,7 +2,7 @@
 
 ## Estado y arquitectura
 
-La integración se prepara como opt-in y permanece inactiva en el arranque normal. No se creó un bot, no se solicitaron credenciales y no se guardó ningún token o chat ID. La configuración predeterminada `config/alertmanager/alertmanager.yml` permanece sin cambios y sigue enviando FIRING y RESOLVED al Incident Logger.
+La integración está implementada y fue validada localmente mediante una alerta sintética FIRING → RESOLVED. Permanece opt-in para instalaciones nuevas: la configuración predeterminada `config/alertmanager/alertmanager.yml` no requiere secretos ni envía Telegram y sigue enviando FIRING y RESOLVED al Incident Logger. El detalle de la prueba está en el [informe de validación de Fase 8](phase-8-telegram-validation.md).
 
 Los archivos `config/alertmanager/alertmanager.telegram.yml`, la plantilla y `compose.telegram.yaml` forman una configuración alternativa explícita. Solo se selecciona al ejecutar Compose con ambos archivos `-f`; el comando predeterminado no carga esa configuración ni monta secretos. El override exige que existan ambos archivos locales debido a `bind.create_host_path: false`, para evitar crear directorios vacíos que oculten un error de configuración.
 
@@ -14,7 +14,7 @@ La plantilla solo muestra el estado, nombre de regla, severidad y resumen genér
 
 ## Secretos y privacidad
 
-Los dos valores locales se guardan en archivos separados bajo `.secrets/`, carpeta ignorada por Git:
+En el equipo que realizó la prueba, los dos valores locales se guardan en archivos separados bajo `.secrets/`, carpeta ignorada por Git. No se publican ni se incluyen en el informe:
 
 - `.secrets/telegram-bot-token`
 - `.secrets/telegram-chat-id`
@@ -57,9 +57,11 @@ No añadas esos archivos, sus valores, capturas ni copias a Git. El bot token pe
 5. Revisa la configuración alternativa sin iniciar servicios: `docker compose -f compose.yaml -f compose.telegram.yaml config --quiet`. El comando no imprime la configuración resuelta.
 6. Después de aprobar la recepción, revisa primero que los servicios requeridos estén saludables y activa manualmente en una ventana de mantenimiento con `docker compose -f compose.yaml -f compose.telegram.yaml up -d alertmanager`. Compose puede iniciar dependencias detenidas y reemplazará Alertmanager para aplicar el archivo alternativo; puede producir una interrupción breve. No la ejecutes durante esta preparación. No hay recarga en vivo en este procedimiento.
 
-### Prueba real posterior
+### Evidencia de la prueba real local
 
-La fase actual solo valida sintaxis y enrutamiento localmente; no contacta Telegram ni genera alertas reales. Cuando exista autorización explícita del destinatario, con Alertmanager opt-in activo, puedes enviar a `http://127.0.0.1:9093/api/v2/alerts` una alerta sintética con el nombre allowlistado `HomeRouterUnavailable`, `source=home-network`, `severity=warning`, `instance=telegram-delivery-test` y un resumen claramente marcado como prueba. Usa `startsAt` anterior a la hora actual y `endsAt` futuro; espera más de los 30 s de agrupación y verifica Telegram y el Incident Logger. Luego vuelve a enviar la misma alerta (mismas etiquetas) con `endsAt` pasado para observar RESOLVED. Evita dejarla activa. No incluyas direcciones reales. Documenta la ventana y elimina la alerta sintética al concluir. Nunca pruebes desconectando Internet doméstico.
+La validación local ya envió una alerta sintética `HomeRouterUnavailable` con `source=home-network`, `severity=warning` e `instance=telegram-delivery-test`. Telegram recibió FIRING y RESOLVED, la alerta dejó de estar activa y el Incident Logger respondió HTTP 200 a ambos webhooks y conservó dos registros en su JSONL local. La evidencia de la primera prueba muestra 08:19 y 08:24 del 4 de noviembre de 2026, hora de Panamá; el intervalo visible es compatible con `group_interval: 5m`, pero no es una garantía de entrega.
+
+Para repetir una prueba en el futuro, requiere autorización del destinatario y Alertmanager opt-in activo. Envía solo una alerta sintética claramente marcada y con las mismas etiquetas para la resolución; permite la ventana de agrupación, confirma FIRING y RESOLVED en ambos receptores, y asegúrate de que la alerta ya no esté activa. Nunca generes la prueba desconectando Internet ni uses direcciones domésticas en las etiquetas o anotaciones.
 
 ### Fallos, reintentos y recuperación
 
@@ -75,13 +77,14 @@ La fase actual solo valida sintaxis y enrutamiento localmente; no contacta Teleg
 2. Revoca inmediatamente el token en BotFather si sospechas exposición; crear un token nuevo no borra copias anteriores. Luego elimina el archivo local con un método aprobado, revisa Git, backups y capturas, vuelve a crear el archivo con el nuevo secreto y repite la activación controlada.
 3. Si hubo publicación accidental, elimina/revoca el token de inmediato y sigue el procedimiento de respuesta a secretos de GitHub; borrar el archivo de la rama actual no lo elimina del historial.
 
-## Validación sin Telegram
+## Validación automatizada y estado actual
 
 - `amtool check-config config/alertmanager/alertmanager.yml`
 - `amtool check-config config/alertmanager/alertmanager.telegram.yml`
 - `amtool config routes test --config.file=config/alertmanager/alertmanager.telegram.yml --verify.receivers=telegram-home-network,incident-logger alertname=HomeRouterUnavailable source=home-network severity=critical`
 - Ejecuta pruebas equivalentes para cada alerta de la allowlist y una alerta no doméstica. La última solo debe elegir `incident-logger`.
-- `docker compose -f compose.yaml config --quiet` valida el modo predeterminado sin iniciar servicios. Para validar sintaxis del override, ambos archivos locales de secretos deben existir; no se crean secretos ficticios en el repositorio.
-- Ejecuta el flujo local habitual de pruebas Prometheus/Alertmanager. Las pruebas unitarias no usan Telegram ni envían mensajes.
+- `docker compose -f compose.yaml config --quiet` valida el modo predeterminado sin iniciar servicios. Para validar el override, ambos archivos locales deben existir; nunca se guardan secretos ficticios en el repositorio.
+- `scripts/ci/validate_telegram_alertmanager.py` y las pruebas de enrutamiento/plantilla validan la configuración sin hacer solicitudes a Telegram. La validación CI no usa credenciales.
+- La prueba local descrita arriba sí contactó Telegram con una alerta sintética autorizada; no se ha repetido como parte del cambio documental.
 
-No se ha activado ni recargado Alertmanager, no se iniciaron ni detuvieron contenedores y no se envió tráfico a Telegram durante esta preparación.
+La configuración estable predeterminada sigue disponible para instalaciones nuevas. Activar o revertir el override reemplaza Alertmanager y debe hacerse de forma controlada; esta documentación no cambia la configuración en ejecución ni los contenedores.
