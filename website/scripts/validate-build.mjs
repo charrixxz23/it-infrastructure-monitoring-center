@@ -13,6 +13,10 @@ assert.match(html, /<html[^>]+lang="es"/i, "built homepage should declare its in
 assert.match(html, /IT Infrastructure/);
 assert.match(html, /Monitoring Center/);
 assert.match(html, /Cloud deployment/);
+assert.match(html, /Implementación preparada · validación externa pendiente\./, "Spanish external-heartbeat status should be explicit");
+assert.match(html, /Implementation prepared · pending external validation\./, "English external-heartbeat status should be explicit");
+assert.match(html, /no se configuró una cuenta ni una Ping URL real/i, "the page must state that no provider credential is configured");
+assert(!html.includes("00000000-0000-0000-0000-000000000001"), "the public page must not contain the synthetic test Ping URL");
 assert.match(html, /data-locale-button="en"/);
 assert.equal((html.match(/<h1\b/gi) ?? []).length, 1, "homepage should have a single primary heading");
 assert.match(html, /id="real-network"/, "the real-world network section should be present");
@@ -79,6 +83,8 @@ const networkDocumentation = [
   "docs/runbooks/home-network.md",
   "docs/incidents/blackbox-exporter-preparation.md",
   "docs/phase-8-telegram-validation.md",
+  "docs/external-heartbeat.md",
+  "docs/runbooks/external-heartbeat.md",
   "docs/templates/home-network-postmortem.md",
   "config/grafana/dashboards/home-network-monitoring.json",
   "config/prometheus/rules/home-network.yml",

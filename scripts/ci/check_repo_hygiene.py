@@ -12,6 +12,7 @@ IGNORE_PROBES = [
     ".env",
     ".env.local",
     ".secrets/placeholder.txt",
+    ".secrets/healthchecks-ping-url",
     "data/incident-report.json",
     "services/example/__pycache__/module.pyc",
     ".venv/pyvenv.cfg",

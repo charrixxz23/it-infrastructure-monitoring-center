@@ -1,0 +1,46 @@
+# Opt-in only. The default Compose stack does not load this agent or require a
+# Healthchecks.io account, check, or Ping URL.
+services:
+  heartbeat-agent:
+    build:
+      context: ./services/heartbeat-agent
+    init: true
+    restart: unless-stopped
+    user: "65534:65534"
+    environment:
+      HEARTBEAT_PING_URL_FILE: /run/secrets/healthchecks_ping_url
+      HEARTBEAT_INTERVAL_SECONDS: "60"
+      HEARTBEAT_COMPONENT_TIMEOUT_SECONDS: "3"
+      HEARTBEAT_PING_TIMEOUT_SECONDS: "5"
+      HEARTBEAT_HEALTH_PORT: "9740"
+    volumes:
+      - type: bind
+        source: ./.secrets/healthchecks-ping-url
+        target: /run/secrets/healthchecks_ping_url
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      - monitoring
+      - heartbeat-egress
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=1m
+    cpus: 0.10
+    mem_limit: 96m
+    pids_limit: 32
+    healthcheck:
+      test: ["CMD", "python", "/app/heartbeat_agent.py", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 75s
+
+networks:
+  heartbeat-egress:
+    name: itmc-heartbeat-egress
+    driver: bridge
