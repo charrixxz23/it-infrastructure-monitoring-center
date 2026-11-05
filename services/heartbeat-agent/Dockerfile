@@ -11,5 +11,5 @@ RUN apk add --no-cache \
     && adduser -S -D -H -u 10001 -G dnsproxy dnsproxy
 
 WORKDIR /app
-COPY --chown=0:0 heartbeat_agent.py heartbeat_entrypoint.py /app/
+COPY --chown=0:0 heartbeat_agent.py heartbeat_entrypoint.py provider_tls_probe.py /app/
 ENTRYPOINT ["python", "/app/heartbeat_entrypoint.py"]

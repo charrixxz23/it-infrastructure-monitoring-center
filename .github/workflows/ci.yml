@@ -50,6 +50,9 @@ jobs:
       - name: Test external heartbeat agent with mocked HTTP responses
         run: python -m unittest discover -s services/heartbeat-agent -p 'test_*.py' -v
 
+      - name: Test namespace-scoped heartbeat egress policy with synthetic DNS
+        run: python -m unittest discover -s services/heartbeat-egress-policy -p 'test_*.py' -v
+
       - name: Parse PowerShell scripts without executing them
         shell: pwsh
         run: ./scripts/ci/validate-powershell.ps1

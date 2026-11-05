@@ -68,11 +68,13 @@ SAFE_NONPUBLIC_IPV4_LITERALS_BY_FILE = {
     "config/heartbeat/squid.conf": frozenset(
         {
             "10.0.0.0",
+            "10.0.0.1",
             "100.64.0.0",
             "169.254.0.0",
             "172.16.0.0",
             "172.31.255.250",
             "172.31.255.251",
+            "127.0.0.1",
             "192.0.0.0",
             "192.168.0.0",
             "198.18.0.0",
@@ -99,6 +101,7 @@ SAFE_NONPUBLIC_IPV4_LITERALS_BY_FILE = {
     "scripts/ci/validate_blackbox.py": frozenset(
         {
             "10.0.0.0",
+            "10.0.0.1",
             "100.64.0.0",
             "169.254.0.0",
             "169.254.1.2",
@@ -114,6 +117,7 @@ SAFE_NONPUBLIC_IPV4_LITERALS_BY_FILE = {
             "172.31.255.248",
             "172.31.255.250",
             "172.31.255.251",
+            "127.0.0.1",
             "192.0.0.0",
             "192.168.0.0",
             "198.18.0.0",
@@ -137,6 +141,17 @@ SAFE_NONPUBLIC_IPV4_LITERALS_BY_FILE = {
             "172.20.0.22",
             "172.20.0.23",
         }
+    ),
+    "services/heartbeat-agent/provider_tls_probe.py": frozenset({"172.31.255.250"}),
+    "services/heartbeat-agent/test_provider_tls_probe.py": frozenset(),
+    "services/heartbeat-egress-policy/egress_policy.py": frozenset(
+        {"127.0.0.1", "127.0.0.11", "172.31.255.250", "172.31.255.251"}
+    ),
+    "services/heartbeat-egress-policy/test_egress_policy.py": frozenset(
+        {"10.0.0.1", "127.0.0.1", "172.31.255.251"}
+    ),
+    "docs/runbooks/external-heartbeat.md": frozenset(
+        {"172.31.255.250", "172.31.255.251"}
     ),
 }
 
