@@ -48,6 +48,17 @@ POLICY_HEALTHCHECK = [
     "-f",
     POLICY_READY_FILE,
 ]
+AGENT_HEALTHCHECK = [
+    "CMD",
+    "/bin/busybox",
+    "wget",
+    "-q",
+    "-T",
+    "2",
+    "-O",
+    "/dev/null",
+    "http://127.0.0.1:9740/health",
+]
 
 
 def read_yaml(path: Path) -> dict[str, Any]:
@@ -281,8 +292,10 @@ def validate_compose() -> list[str]:
         errors.append(
             "environment must contain only the secret-file path and bounded settings"
         )
-    if "--healthcheck" not in agent.get("healthcheck", {}).get("test", []):
-        errors.append("container healthcheck must use the local read-only endpoint")
+    if agent.get("healthcheck", {}).get("test") != AGENT_HEALTHCHECK:
+        errors.append(
+            "container healthcheck must use the exact BusyBox HTTP endpoint check"
+        )
 
     if proxy.get("privileged") is True or proxy.get("ports"):
         errors.append("proxy must not be privileged or published")

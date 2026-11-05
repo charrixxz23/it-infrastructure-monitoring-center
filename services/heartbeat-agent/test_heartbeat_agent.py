@@ -196,7 +196,81 @@ class HeartbeatAgentTests(unittest.TestCase):
         )
         result = agent.HttpClient(opener, opener).check_component(agent.REQUIRED_CHECKS[0], 3)
 
-        self.assertEqual(result, agent.RequestResult(False, "network_error"))
+        self.assertEqual(result, agent.RequestResult(False, "dns_error"))
+
+    def test_internal_failures_have_safe_specific_categories(self) -> None:
+        cases = (
+            (
+                "dns_error",
+                socket.gaierror("host 192.0.2.9 private.invalid"),
+            ),
+            (
+                "dns_error",
+                urllib.error.URLError(socket.gaierror("host 192.0.2.9 private.invalid")),
+            ),
+            (
+                "connection_refused",
+                ConnectionRefusedError("private endpoint refused"),
+            ),
+            (
+                "connection_refused",
+                urllib.error.URLError(ConnectionRefusedError("private endpoint refused")),
+            ),
+            (
+                "connection_error",
+                OSError("private endpoint reset"),
+            ),
+            (
+                "connection_error",
+                urllib.error.URLError(OSError("private endpoint reset")),
+            ),
+            ("timeout", socket.timeout("private timeout detail")),
+            (
+                "timeout",
+                urllib.error.URLError(socket.timeout("private timeout detail")),
+            ),
+            (
+                "http_503",
+                urllib.error.HTTPError(
+                    "http://private.invalid/private-path", 503, "private detail", {}, None
+                ),
+            ),
+        )
+        for expected_reason, failure in cases:
+            with self.subTest(reason=expected_reason):
+                opener = ScriptedOpener([failure])
+                result = agent.HttpClient(opener, opener).check_component(
+                    agent.REQUIRED_CHECKS[0], 3
+                )
+
+                self.assertEqual(result, agent.RequestResult(False, expected_reason))
+                self.assertNotIn("192.0.2.9", result.reason)
+                self.assertNotIn("private", result.reason)
+
+    def test_internal_connection_failure_suppresses_success_ping(self) -> None:
+        opener = ScriptedOpener(
+            [
+                FakeResponse(200),
+                urllib.error.URLError(
+                    ConnectionRefusedError("private endpoint refused")
+                ),
+                FakeResponse(200),
+                FakeResponse(200),
+            ]
+        )
+
+        result = agent.run_cycle(
+            agent.REQUIRED_CHECKS,
+            agent.HttpClient(opener, opener),
+            PING_URL,
+            component_timeout=3,
+            ping_timeout=5,
+        )
+
+        self.assertEqual(
+            result, agent.CycleResult(False, ("Alertmanager:connection_refused",))
+        )
+        self.assertEqual(len(opener.requests), 4)
 
     def test_connection_failure_to_healthchecks_is_sanitized(self) -> None:
         opener = ScriptedOpener([*healthy_responses(4), OSError("synthetic connection failure")])
@@ -425,6 +499,36 @@ class HeartbeatAgentTests(unittest.TestCase):
         self.assertTrue(state.is_healthy())
         state.record_cycle(agent.CycleResult(False, ("Alertmanager:http_503",)))
         self.assertFalse(state.is_healthy())
+
+    def test_health_endpoint_returns_success_only_for_recent_full_cycle(self) -> None:
+        def request_status(state: agent.AgentState) -> int:
+            server = agent.create_health_server(state, 0)
+            thread = threading.Thread(target=server.serve_forever)
+            thread.start()
+            try:
+                request = urllib.request.Request(
+                    f"http://127.0.0.1:{server.server_port}/health"
+                )
+                try:
+                    with urllib.request.urlopen(request, timeout=2) as response:
+                        return response.status
+                except urllib.error.HTTPError as error:
+                    return error.code
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+
+        state = agent.AgentState(60)
+        self.assertEqual(request_status(state), 503)
+        state.record_cycle(agent.CycleResult(True))
+        self.assertEqual(request_status(state), 200)
+        state.record_cycle(agent.CycleResult(False, ("Prometheus:connection_refused",)))
+        self.assertEqual(request_status(state), 503)
+
+        stale_state = agent.AgentState(-1)
+        stale_state.record_cycle(agent.CycleResult(True))
+        self.assertEqual(request_status(stale_state), 503)
 
     def test_health_server_binds_only_to_container_loopback(self) -> None:
         server = agent.create_health_server(agent.AgentState(60), 0)

@@ -172,6 +172,21 @@ class RequestResult:
     reason: str
 
 
+def _classify_internal_error(error: BaseException) -> str:
+    """Return a stable, non-sensitive category for an internal HTTP failure."""
+    if isinstance(error, urllib.error.HTTPError):
+        return f"http_{error.code}"
+
+    reason = error.reason if isinstance(error, urllib.error.URLError) else error
+    if isinstance(reason, (TimeoutError, socket.timeout)):
+        return "timeout"
+    if isinstance(reason, socket.gaierror):
+        return "dns_error"
+    if isinstance(reason, ConnectionRefusedError):
+        return "connection_refused"
+    return "connection_error"
+
+
 class HttpClient:
     def __init__(
         self,
@@ -205,14 +220,8 @@ class HttpClient:
         except urllib.error.HTTPError as error:
             error.close()
             return RequestResult(False, f"http_{error.code}")
-        except (TimeoutError, socket.timeout):
-            return RequestResult(False, "timeout")
-        except urllib.error.URLError as error:
-            if isinstance(error.reason, (TimeoutError, socket.timeout)):
-                return RequestResult(False, "timeout")
-            return RequestResult(False, "network_error")
-        except OSError:
-            return RequestResult(False, "network_error")
+        except (urllib.error.URLError, OSError) as error:
+            return RequestResult(False, _classify_internal_error(error))
 
     def send_success_ping(self, ping_url: str, timeout: float) -> RequestResult:
         request = self._request(ping_url, "GET")
