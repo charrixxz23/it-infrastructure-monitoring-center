@@ -53,6 +53,9 @@ jobs:
       - name: Test namespace-scoped heartbeat egress policy with synthetic DNS
         run: python -m unittest discover -s services/heartbeat-egress-policy -p 'test_*.py' -v
 
+      - name: Test synthetic backup planning and manifest integrity
+        run: python -m unittest discover -s scripts/backup -p 'test_*.py' -v
+
       - name: Parse PowerShell scripts without executing them
         shell: pwsh
         run: ./scripts/ci/validate-powershell.ps1
@@ -175,6 +178,9 @@ jobs:
       - name: Validate optional external heartbeat security and scope
         run: python scripts/ci/validate_heartbeat.py
 
+      - name: Validate backup planning and fail-safe scope
+        run: python scripts/ci/validate_backup.py
+
       - name: Install exact Prometheus and Alertmanager validation binaries
         run: |
           set -euo pipefail
@@ -239,5 +245,6 @@ jobs:
             echo '- Prometheus config, rules, and rule tests using the project-pinned promtool version'
             echo '- Alertmanager config using the project-pinned amtool version'
             echo '- Optional heartbeat Compose override, security boundaries, and mocked-only tests; no provider account or ping is used'
+            echo '- Synthetic backup inventory/manifest validation only; no volume data or production backup is accessed'
             echo '- GitHub Actions workflow syntax and semantics'
           } >> "$GITHUB_STEP_SUMMARY"

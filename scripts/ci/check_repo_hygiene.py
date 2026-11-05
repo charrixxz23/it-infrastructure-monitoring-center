@@ -13,6 +13,9 @@ IGNORE_PROBES = [
     ".env.local",
     ".secrets/placeholder.txt",
     ".secrets/healthchecks-ping-url",
+    "backups/example.itmc-config-test.zip",
+    ".itmc-backups/example.itmc-config-test.zip",
+    "itmc-config-example-12345678.zip",
     "data/incident-report.json",
     "services/example/__pycache__/module.pyc",
     ".venv/pyvenv.cfg",
@@ -26,6 +29,8 @@ IGNORE_PROBES = [
 ]
 TRACKED_ARTIFACT_DIRS = {
     "data",
+    "backups",
+    ".itmc-backups",
     ".secrets",
     ".venv",
     "venv",
@@ -41,6 +46,7 @@ TRACKED_ARTIFACT_SUFFIXES = {
     ".temp",
     ".bak",
     ".pyc",
+    ".zip",
 }
 
 

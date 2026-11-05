@@ -52,6 +52,12 @@ El exporter Python es un proceso local de Windows, fuera de Compose. Prometheus 
 - Los archivos de configuración y dashboard se versionan bajo config/ y se montan en solo lectura. Provisioning los vuelve a cargar automáticamente.
 - docker compose down conserva datos; docker compose down --volumes los elimina.
 
+## Preparación de backup y recuperación — Fase 10.1
+
+`scripts/inventory-itmc.ps1` recopila, en modo lectura, el estado de los cuatro nombres de volumen definidos por Compose y los servicios etiquetados del proyecto. No consulta mountpoints, variables de entorno, logs ni contenido de volúmenes; Docker no expone de forma portable el tamaño usado por `docker volume inspect`. `scripts/backup-itmc.ps1` usa `Plan` por defecto. Su modo explícito `BackupConfig` captura solo archivos seguros de `HEAD` a un ZIP fuera del repositorio, con manifiesto UTC, commit y hashes SHA-256 por archivo. Excluye `.env`, `.secrets/`, targets locales, `data/`, bases activas y el informe de auditoría.
+
+No se copian volúmenes ni se detienen servicios. Prometheus TSDB no se archiva mientras está activo; la API administrativa de snapshot continúa deshabilitada. Para Grafana/SQLite se evaluará una copia con SQLite Online Backup API, no una copia directa del archivo activo. El estado de Alertmanager e Incident Logger también requiere una estrategia consistente y una restauración de ensayo; por ahora esas copias están pendientes. La guía de [backup y recuperación](backup-recovery.md) define alcance y límites; el [runbook](runbooks/disaster-recovery.md) especifica condiciones de restauración aislada.
+
 Las cuatro alertas de producción vigilan targets configurados, CPU >85 %, memoria >90 % y C: >90 %, con duraciones respectivas de 1 o 5 minutos. El `up == 0` no alerta sobre un target eliminado de la configuración: sin una serie scrapeada no existe una muestra cero que evaluar. La regla `TestIncident` se carga desde un archivo separado y queda inactiva con `vector(0) == 1`; el simulador la cambia temporalmente y la restaura incluso si falla.
 
 ## Identidad del host observado

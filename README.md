@@ -144,6 +144,12 @@ Consulta [arquitectura y seguridad](docs/home-network-monitoring.md), [runbook](
 
 See the [external heartbeat design, evidence, and residual risks](docs/external-heartbeat.md) and the [operational, troubleshooting, and rotation runbook](docs/runbooks/external-heartbeat.md). Option B uses internal agent networks, a separate proxy-namespace firewall, and Squid's exact-host/port policy. No host firewall rule was changed. The owner-reported real cycles and provider notifications are summarized in the design document; their exact Down/Up transition timing and cause were not recorded.
 
+### Backup & Disaster Recovery — Fase 10.1
+
+**ES:** La preparación de respaldos es local y manual. `scripts/backup-itmc.ps1` usa `Plan` por defecto; `scripts/inventory-itmc.ps1` consulta solo metadatos Docker de los cuatro volúmenes y servicios esperados. El modo explícito `BackupConfig` empaqueta únicamente archivos versionados en `HEAD`, excluye secretos, targets locales, datos y bases activas, e incluye un manifiesto con commit y hashes SHA-256. No es un respaldo integral ni de volúmenes. Las copias coherentes de Prometheus, Grafana/SQLite, Alertmanager e Incident Logger siguen pendientes hasta validar una estrategia y restauración aislada. No guardes artefactos en GitHub, CI o Cloudflare. Consulta la [guía de alcance](docs/backup-recovery.md) y el [runbook de recuperación](docs/runbooks/disaster-recovery.md).
+
+**EN:** Backup preparation is local and manual. `scripts/backup-itmc.ps1` defaults to `Plan`; `scripts/inventory-itmc.ps1` reads only Docker metadata for the four expected volumes and project services. Explicit `BackupConfig` packages only files committed at `HEAD`, excludes secrets, local targets, runtime data, and active databases, and embeds a manifest with commit and SHA-256 hashes. It is neither a full-system nor volume backup. Consistent backups of Prometheus, Grafana/SQLite, Alertmanager, and Incident Logger remain pending until a strategy and isolated restore are validated. Do not store artifacts in GitHub, CI, or Cloudflare. See the [scope guide](docs/backup-recovery.md) and [disaster recovery runbook](docs/runbooks/disaster-recovery.md).
+
 ## Monitoreo y alertas
 
 El KPI **Targets UP / Total** de IT Infrastructure Overview cuenta solo los jobs Prometheus y Node Exporter, por eso indica **2/2**. La vista **Prometheus Targets** incluye además el job container-exporter y muestra **3/3**. Los dos valores tienen alcances distintos y son consistentes.
