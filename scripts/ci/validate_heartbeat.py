@@ -40,6 +40,14 @@ EXPECTED_SERVICE_PORTS = {
 PROXY_IP = "172.31.255.250"
 AGENT_IP = "172.31.255.251"
 PROXY_SUBNET = "172.31.255.248/29"
+POLICY_READY_FILE = "/run/heartbeat-egress-policy-ready"
+POLICY_HEALTHCHECK = [
+    "CMD",
+    "/bin/busybox",
+    "test",
+    "-f",
+    POLICY_READY_FILE,
+]
 
 
 def read_yaml(path: Path) -> dict[str, Any]:
@@ -165,9 +173,17 @@ def validate_compose() -> list[str]:
         errors.append(
             "egress policy CPU, memory, and process limits must remain bounded"
         )
-    if "--healthcheck" not in policy.get("healthcheck", {}).get("test", []):
+    policy_healthcheck = policy.get("healthcheck", {})
+    if policy_healthcheck.get("test") != POLICY_HEALTHCHECK:
+        errors.append("policy health must use the exact BusyBox readiness-file check")
+    retries = policy_healthcheck.get("retries")
+    if (
+        policy_healthcheck.get("disable") is True
+        or type(retries) is not int
+        or retries < 1
+    ):
         errors.append(
-            "policy health must require successful firewall and local DNS setup"
+            "missing readiness must remain enabled and make policy health unhealthy"
         )
     if proxy.get("depends_on") != {
         "heartbeat-egress-policy": {
@@ -435,6 +451,48 @@ def validate_agent() -> list[str]:
 
     if 'PROVIDER_HOST = "hc-ping.com"' not in policy_source:
         errors.append("proxy firewall must resolve only the fixed provider hostname")
+    if f'READY_FILE = Path("{POLICY_READY_FILE}")' not in policy_source:
+        errors.append(
+            "policy healthcheck path must match the supervisor readiness file"
+        )
+    startup_start = policy_source.find("def run_policy()")
+    startup_end = policy_source.find("\ndef main()", startup_start)
+    startup = (
+        policy_source[startup_start:startup_end]
+        if startup_start >= 0 and startup_end > startup_start
+        else ""
+    )
+    setup_start = startup.find("    try:\n")
+    setup_end = startup.find(
+        "    except (OSError, PolicyError, subprocess.SubprocessError):",
+        setup_start,
+    )
+    setup = (
+        startup[setup_start:setup_end]
+        if setup_start >= 0 and setup_end > setup_start
+        else ""
+    )
+    readiness_steps = (
+        "apply_firewall(build_firewall_commands())",
+        "addresses, ttl = resolve_provider_ipv4()",
+        "write_dnsmasq_files(addresses)",
+        "dns_process = _start_dnsmasq(addresses)",
+        "_install_provider_policy(addresses)",
+        "_write_ready(True)",
+    )
+    readiness_positions = [setup.find(step) for step in readiness_steps]
+    if (
+        not startup
+        or startup.find("_write_ready(False)") < 0
+        or startup.find("_write_ready(False)") > setup_start
+        or any(position < 0 for position in readiness_positions)
+        or readiness_positions != sorted(readiness_positions)
+    ):
+        errors.append(
+            "readiness may be created only after firewall and local DNS setup succeed"
+        )
+    if policy_source.count("_write_ready(False)") < 3:
+        errors.append("startup, DNS refresh failure, and shutdown must clear readiness")
     for marker in (
         'DOCKER_DNS = "127.0.0.11"',
         'LOCAL_DNS = "127.0.0.1"',
