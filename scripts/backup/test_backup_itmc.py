@@ -262,10 +262,19 @@ class BackupItmcTests(unittest.TestCase):
             archive.writestr(
                 backup_itmc.MANIFEST_NAME, b"[" * 5000 + b"0" + b"]" * 5000
             )
-        with self.assertRaisesRegex(
-            backup_itmc.BackupError, "archive or its manifest is invalid or corrupt"
-        ):
+        with self.assertRaises(backup_itmc.BackupError) as raised:
             backup_itmc.verify_bundle(archive_path)
+        # JSON parser behavior differs across supported Python versions: one
+        # may report excessive nesting while another rejects the resulting
+        # top-level value as an unsupported manifest format. Both outcomes
+        # must remain bounded, safe errors that do not include input content.
+        self.assertIn(
+            str(raised.exception),
+            {
+                "The archive or its manifest is invalid or corrupt.",
+                "The archive manifest has an unsupported format.",
+            },
+        )
 
     def test_actual_stream_limit_rejects_forged_small_zipinfo_size(self) -> None:
         archive_path = self.destination / "forged-member-size.zip"
