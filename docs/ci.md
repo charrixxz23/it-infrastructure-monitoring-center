@@ -11,6 +11,7 @@ El workflow `.github/workflows/ci.yml` valida cambios de `main`, `develop`, `dev
 - Revisa reglas `.gitignore`, evita versionar `.env`, `data/`, cachés y artefactos runtime, y escanea con Gitleaks los archivos Git rastreados y no ignorados que podrían entrar al cambio. No recorre objetos/historial Git; todos los hallazgos se redactan antes de aparecer en los logs. El escaneo excluye `.env` y reportes locales ignorados.
 - Valida la estructura JSON de los tres dashboards, incluyendo sus nombres, UID, IDs de panel y los inventarios de 14, 12 y 13 paneles.
 - Ejecuta `docker compose config --quiet` sobre la configuración predeterminada y los overrides opt-in de Telegram y External Heartbeat en una copia temporal con credenciales ficticias no sensibles. Solo renderiza configuración: no inicia contenedores, no envía pings, no contacta el Docker Engine ni cambia servicios o volúmenes.
+- Ejecuta pruebas sintéticas de inventario/backup en un repositorio temporal con archivos y respuestas Docker simuladas, además de un validador estático de alcance. No crea artefactos reales, no consulta el Docker Engine, no lee secretos locales ni restaura datos.
 - Comprueba documentación Markdown, enlaces locales y bloques Mermaid. Valida Blackbox Exporter, el enrutamiento opt-in de Telegram y las plantillas con destinos sintéticos; valida además la red, el montaje de secreto, los límites de recursos y la URL fija del agente External Heartbeat. Esas pruebas no contactan Telegram ni Healthchecks.io.
 - Descarga `promtool` 3.15.0, `amtool` 0.34.1 y `actionlint` 1.7.12 desde releases exactos, verifica SHA-256 y valida Prometheus, reglas, rule tests, Alertmanager y el workflow.
 
@@ -30,6 +31,7 @@ python -m unittest discover -s services/incident-logger -p 'test_*.py' -v
 python -m unittest discover -s services/container-exporter -p 'test_*.py' -v
 python -m unittest discover -s services/heartbeat-agent -p 'test_*.py' -v
 python -m unittest discover -s services/heartbeat-egress-policy -p 'test_*.py' -v
+python -m unittest discover -s scripts/backup -p 'test_*.py' -v
 python scripts/ci/validate_dashboards.py
 python scripts/ci/validate_blackbox.py
 python scripts/ci/check_runtime_dependencies.py
@@ -37,6 +39,7 @@ python scripts/ci/check_repo_hygiene.py
 python scripts/ci/validate_compose.py
 python scripts/ci/validate_telegram_alertmanager.py
 python scripts/ci/validate_heartbeat.py
+python scripts/ci/validate_backup.py
 python scripts/ci/validate_cloud_docs.py
 pwsh -NoProfile -File scripts/ci/validate-powershell.ps1
 python -m pip install --disable-pip-version-check -r .github/requirements-ci.txt
@@ -50,6 +53,8 @@ git diff --check
 `validate_compose.py` copia solo el árbol del proyecto a una carpeta temporal, omite `.env` y datos locales, añade credenciales ficticias y elimina la copia al terminar. No lee, sustituye ni elimina el `.env` real.
 
 Las pruebas automáticas del External Heartbeat inspeccionan el override opt-in y ejercitan transporte HTTP simulado y DNS sintético. No requieren credenciales ni contactan al proveedor; por sí solas no verifican conectividad externa ni entrega de notificaciones. La cronología operativa corregida por el propietario separa tres ciclos aceptados durante la validación inicial, cuando todavía se utilizaba la credencial original, de cuatro ciclos posteriores al reemplazo y recreación del agente. El propietario confirmó el estado del nuevo check, la transición del original a `Down` y su posterior eliminación; la hora de eliminación no fue proporcionada. La inspección Docker inicial fue anterior al reemplazo y no demuestra el estado actual. Todo ello es evidencia histórica, no una prueba de CI, monitorización en vivo ni garantía de disponibilidad. Consulte el [diseño de seguridad y evidencia](external-heartbeat.md) y el [runbook](runbooks/external-heartbeat.md).
+
+Las pruebas de backup usan repositorios Git temporales y respuestas Docker simuladas; comprueban exclusiones, límites de destino, hashes del manifiesto, fallos e interrupciones. No leen volúmenes del host, no crean un respaldo de producción y no prueban una restauración real. La ejecución manual de `Plan`/`Inventory` puede consultar metadatos Docker en Windows; el modo explícito de backup solo debe apuntar a almacenamiento local cifrado y externo al repositorio.
 
 Para repetir las validaciones de métricas, instala o localiza `promtool` 3.15.0 y `amtool` 0.34.1 y ejecuta:
 

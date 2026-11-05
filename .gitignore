@@ -5,6 +5,9 @@
 
 # Runtime data and local exports
 data/
+backups/
+/.itmc-backups/
+itmc-config-*.zip
 *.db
 *.wal
 *.log
