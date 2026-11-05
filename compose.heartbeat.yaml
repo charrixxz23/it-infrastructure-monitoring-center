@@ -83,7 +83,7 @@ services:
     mem_limit: 64m
     pids_limit: 16
     healthcheck:
-      test: ["CMD", "python", "/app/egress_policy.py", "--healthcheck"]
+      test: ["CMD", "/bin/busybox", "test", "-f", "/run/heartbeat-egress-policy-ready"]
       interval: 10s
       timeout: 3s
       retries: 3
