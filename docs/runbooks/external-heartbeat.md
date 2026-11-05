@@ -1,6 +1,6 @@
 # Runbook — optional external heartbeat
 
-**Current state (2026-11-05):** the owner-authorized heartbeat is active. Read-only Docker inspection confirmed the six core services, Heartbeat Agent, and Heartbeat Egress Policy healthy; Squid was running. The owner reports that the Ping URL was rotated after the previous value was exposed and that the replacement is in use. The owner supplied three accepted cycle records and confirmed provider Down → Up detection and loss/recovery emails. Neither the URL nor a check identifier is included in this runbook. The supervisor/Windows host remain trusted boundaries; successful operation does not create a host-level egress allowlist.
+**Current state (2026-11-05):** the owner-authorized heartbeat is active. Read-only Docker inspection confirmed the six core services, Heartbeat Agent, and Heartbeat Egress Policy healthy; Squid was running. The owner reports that the Ping URL was rotated after the previous value was exposed and that the replacement is in use. The owner supplied three accepted cycle records and confirmed provider Down → Up detection and loss/recovery emails. Administrative confirmation that the old exposed check was invalidated or retired remains pending; this runbook did not contact the provider or inspect credentials. Neither the URL nor a check identifier is included in this runbook. The supervisor/Windows host remain trusted boundaries; successful operation does not create a host-level egress allowlist.
 
 ## Prerequisites and scope
 
@@ -152,7 +152,7 @@ This stops the three opt-in services: agent, proxy, and policy supervisor. Remov
 
 ## Secret rotation and compromise response
 
-The owner reports that the previous Ping URL was exposed, rotated, and replaced in the active local configuration. The old value and replacement are not recorded here. For a future suspected exposure:
+The owner reports that the previous Ping URL was exposed, rotated, and replaced in the active local configuration. The old value and replacement are not recorded here. Administrative confirmation that the old check was invalidated or retired is still pending and must be completed through the authorized provider UI. For a future suspected exposure:
 
 1. Treat the URL as a bearer credential that can forge successful check-ins. In the authorized provider UI, rotate the affected URL; do not remove the old provider check automatically.
 2. Stop only `heartbeat-agent` before replacing the ignored local file. Coordinate with the owner because the provider may report a missed heartbeat during rotation; do not stop the core ITMC services.

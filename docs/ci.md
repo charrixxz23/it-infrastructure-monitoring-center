@@ -4,7 +4,7 @@ El workflow `.github/workflows/ci.yml` valida cambios de `main`, `develop`, `dev
 
 ## Qué ejecuta GitHub Actions
 
-- Compila sintácticamente el código Python y ejecuta pruebas `unittest` de Incident Logger, Container Exporter y External Heartbeat en Python 3.10 y 3.13. Las pruebas del exporter simulan Docker CLI; las del heartbeat simulan respuestas HTTP y nunca contactan Healthchecks.io.
+- Compila sintácticamente el código Python y ejecuta pruebas `unittest` de Incident Logger, Container Exporter, External Heartbeat y el supervisor de egreso en Python 3.10 y 3.13. Las pruebas del exporter simulan Docker CLI; las del heartbeat simulan respuestas HTTP; las del supervisor usan DNS sintético. Ninguna contacta Healthchecks.io.
 - Instala las dependencias web desde el lockfile y ejecuta `pnpm check`, `pnpm build`, `pnpm test` y `pnpm audit --audit-level high` para el portal Astro y sus capturas estáticas.
 - Comprueba sintaxis de scripts PowerShell sin ejecutarlos, y aplica Ruff a Python, yamllint a YAML y actionlint al workflow.
 - Audita los paquetes fijados de herramientas CI con pip-audit. La aplicación no declara dependencias Python de terceros y ese supuesto se comprueba explícitamente; si se incorpora un manifiesto de runtime, el job falla hasta incluirlo en la auditoría.
@@ -18,7 +18,7 @@ El workflow se compone de cuatro jobs; la matriz Python genera dos resultados se
 
 Ruff usa el conjunto estable `E4,E7,E9,F` para todo Python con sintaxis objetivo Python 3.10; verifica formato solo en los nuevos helpers de CI para evitar reformatear masivamente código de fases anteriores. yamllint hereda el perfil relajado y desactiva el límite cosmético de longitud, ya que algunas anotaciones de reglas son deliberadamente largas.
 
-El job de dependencias analiza los paquetes de CI definidos en `.github/requirements-ci.txt`; no escanea las capas base de imágenes Docker ni sustituye un escáner de imágenes. El archivo fija las versiones directas y transitivas de las herramientas. Los hashes de los artefactos PyPI no forman parte de esta fase.
+El job de dependencias analiza los paquetes de CI definidos en `.github/requirements-ci.txt`; CI no realiza un escaneo integral de vulnerabilidades de las imágenes Docker (incluidas sus capas base) ni sustituye un escáner de imágenes. El archivo fija las versiones directas y transitivas de las herramientas. Los hashes de los artefactos PyPI no forman parte de esta fase.
 
 ## Comprobaciones locales
 
@@ -29,6 +29,7 @@ python -m compileall -q services scripts
 python -m unittest discover -s services/incident-logger -p 'test_*.py' -v
 python -m unittest discover -s services/container-exporter -p 'test_*.py' -v
 python -m unittest discover -s services/heartbeat-agent -p 'test_*.py' -v
+python -m unittest discover -s services/heartbeat-egress-policy -p 'test_*.py' -v
 python scripts/ci/validate_dashboards.py
 python scripts/ci/validate_blackbox.py
 python scripts/ci/check_runtime_dependencies.py
@@ -48,7 +49,7 @@ git diff --check
 
 `validate_compose.py` copia solo el árbol del proyecto a una carpeta temporal, omite `.env` y datos locales, añade credenciales ficticias y elimina la copia al terminar. No lee, sustituye ni elimina el `.env` real.
 
-La validación del External Heartbeat inspecciona el override opt-in y ejecuta unit tests con un transporte HTTP simulado. No requiere un Ping URL real ni genera tráfico hacia el proveedor. El estado local de health checks no demuestra todavía conectividad externa o entrega de notificaciones; consulte el [diseño de seguridad](external-heartbeat.md) y el [runbook](runbooks/external-heartbeat.md) para la futura activación manual.
+Las pruebas automáticas del External Heartbeat inspeccionan el override opt-in y ejercitan transporte HTTP simulado y DNS sintético. No requieren credenciales ni contactan al proveedor; por sí solas no verifican conectividad externa ni entrega de notificaciones. Por separado, la evidencia operativa del 2026-11-05 registra tres ciclos reales aceptados, una transición `Down → Up` y correos de caída/recuperación confirmados por el propietario; la inspección Docker de esa fecha encontró el agente y supervisor healthy y Squid ejecutándose. Es evidencia histórica puntual, no una prueba de CI, monitorización en vivo ni garantía de disponibilidad. La confirmación administrativa de que el check anterior expuesto fue invalidado o retirado sigue pendiente. Consulte el [diseño de seguridad y evidencia](external-heartbeat.md) y el [runbook](runbooks/external-heartbeat.md).
 
 Para repetir las validaciones de métricas, instala o localiza `promtool` 3.15.0 y `amtool` 0.34.1 y ejecuta:
 
