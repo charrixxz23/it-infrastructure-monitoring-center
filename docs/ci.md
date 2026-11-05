@@ -4,21 +4,21 @@ El workflow `.github/workflows/ci.yml` valida cambios de `main`, `develop`, `dev
 
 ## Qué ejecuta GitHub Actions
 
-- Compila sintácticamente el código Python y ejecuta las pruebas `unittest` de Incident Logger y Container Exporter en Python 3.10 y 3.13. Las pruebas del exporter simulan Docker CLI y no consultan el daemon.
+- Compila sintácticamente el código Python y ejecuta pruebas `unittest` de Incident Logger, Container Exporter, External Heartbeat y el supervisor de egreso en Python 3.10 y 3.13. Las pruebas del exporter simulan Docker CLI; las del heartbeat simulan respuestas HTTP; las del supervisor usan DNS sintético. Ninguna contacta Healthchecks.io.
 - Instala las dependencias web desde el lockfile y ejecuta `pnpm check`, `pnpm build`, `pnpm test` y `pnpm audit --audit-level high` para el portal Astro y sus capturas estáticas.
 - Comprueba sintaxis de scripts PowerShell sin ejecutarlos, y aplica Ruff a Python, yamllint a YAML y actionlint al workflow.
 - Audita los paquetes fijados de herramientas CI con pip-audit. La aplicación no declara dependencias Python de terceros y ese supuesto se comprueba explícitamente; si se incorpora un manifiesto de runtime, el job falla hasta incluirlo en la auditoría.
 - Revisa reglas `.gitignore`, evita versionar `.env`, `data/`, cachés y artefactos runtime, y escanea con Gitleaks los archivos Git rastreados y no ignorados que podrían entrar al cambio. No recorre objetos/historial Git; todos los hallazgos se redactan antes de aparecer en los logs. El escaneo excluye `.env` y reportes locales ignorados.
 - Valida la estructura JSON de los tres dashboards, incluyendo sus nombres, UID, IDs de panel y los inventarios de 14, 12 y 13 paneles.
-- Ejecuta `docker compose config --quiet` en una copia temporal con un `.env` efímero no sensible. Solo renderiza la configuración: no inicia contenedores, no contacta el Docker Engine ni cambia servicios o volúmenes.
-- Comprueba documentación Markdown, enlaces locales y bloques Mermaid. Valida Blackbox Exporter, el enrutamiento opt-in de Telegram y las plantillas con destinos sintéticos; esas pruebas no contactan Telegram.
+- Ejecuta `docker compose config --quiet` sobre la configuración predeterminada y los overrides opt-in de Telegram y External Heartbeat en una copia temporal con credenciales ficticias no sensibles. Solo renderiza configuración: no inicia contenedores, no envía pings, no contacta el Docker Engine ni cambia servicios o volúmenes.
+- Comprueba documentación Markdown, enlaces locales y bloques Mermaid. Valida Blackbox Exporter, el enrutamiento opt-in de Telegram y las plantillas con destinos sintéticos; valida además la red, el montaje de secreto, los límites de recursos y la URL fija del agente External Heartbeat. Esas pruebas no contactan Telegram ni Healthchecks.io.
 - Descarga `promtool` 3.15.0, `amtool` 0.34.1 y `actionlint` 1.7.12 desde releases exactos, verifica SHA-256 y valida Prometheus, reglas, rule tests, Alertmanager y el workflow.
 
 El workflow se compone de cuatro jobs; la matriz Python genera dos resultados separados, por lo que GitHub muestra cinco check runs. La captura histórica de CI #4 y su ejecución asociada al PR #1 corresponden a una versión anterior del workflow, antes de incorporar las validaciones Astro.
 
 Ruff usa el conjunto estable `E4,E7,E9,F` para todo Python con sintaxis objetivo Python 3.10; verifica formato solo en los nuevos helpers de CI para evitar reformatear masivamente código de fases anteriores. yamllint hereda el perfil relajado y desactiva el límite cosmético de longitud, ya que algunas anotaciones de reglas son deliberadamente largas.
 
-El job de dependencias analiza los paquetes de CI definidos en `.github/requirements-ci.txt`; no escanea las capas base de imágenes Docker ni sustituye un escáner de imágenes. El archivo fija las versiones directas y transitivas de las herramientas. Los hashes de los artefactos PyPI no forman parte de esta fase.
+El job de dependencias analiza los paquetes de CI definidos en `.github/requirements-ci.txt`; CI no realiza un escaneo integral de vulnerabilidades de las imágenes Docker (incluidas sus capas base) ni sustituye un escáner de imágenes. El archivo fija las versiones directas y transitivas de las herramientas. Los hashes de los artefactos PyPI no forman parte de esta fase.
 
 ## Comprobaciones locales
 
@@ -28,23 +28,28 @@ Desde la raíz del repositorio en PowerShell:
 python -m compileall -q services scripts
 python -m unittest discover -s services/incident-logger -p 'test_*.py' -v
 python -m unittest discover -s services/container-exporter -p 'test_*.py' -v
+python -m unittest discover -s services/heartbeat-agent -p 'test_*.py' -v
+python -m unittest discover -s services/heartbeat-egress-policy -p 'test_*.py' -v
 python scripts/ci/validate_dashboards.py
 python scripts/ci/validate_blackbox.py
 python scripts/ci/check_runtime_dependencies.py
 python scripts/ci/check_repo_hygiene.py
 python scripts/ci/validate_compose.py
 python scripts/ci/validate_telegram_alertmanager.py
+python scripts/ci/validate_heartbeat.py
 python scripts/ci/validate_cloud_docs.py
 pwsh -NoProfile -File scripts/ci/validate-powershell.ps1
 python -m pip install --disable-pip-version-check -r .github/requirements-ci.txt
 ruff check services scripts --select E4,E7,E9,F --target-version py310
 ruff format --check scripts/ci
-yamllint .github config
+yamllint .github config compose.heartbeat.yaml
 pip-audit --strict --requirement .github/requirements-ci.txt
 git diff --check
 ```
 
 `validate_compose.py` copia solo el árbol del proyecto a una carpeta temporal, omite `.env` y datos locales, añade credenciales ficticias y elimina la copia al terminar. No lee, sustituye ni elimina el `.env` real.
+
+Las pruebas automáticas del External Heartbeat inspeccionan el override opt-in y ejercitan transporte HTTP simulado y DNS sintético. No requieren credenciales ni contactan al proveedor; por sí solas no verifican conectividad externa ni entrega de notificaciones. La cronología operativa corregida por el propietario separa tres ciclos aceptados durante la validación inicial, cuando todavía se utilizaba la credencial original, de cuatro ciclos posteriores al reemplazo y recreación del agente. El propietario confirmó el estado del nuevo check, la transición del original a `Down` y su posterior eliminación; la hora de eliminación no fue proporcionada. La inspección Docker inicial fue anterior al reemplazo y no demuestra el estado actual. Todo ello es evidencia histórica, no una prueba de CI, monitorización en vivo ni garantía de disponibilidad. Consulte el [diseño de seguridad y evidencia](external-heartbeat.md) y el [runbook](runbooks/external-heartbeat.md).
 
 Para repetir las validaciones de métricas, instala o localiza `promtool` 3.15.0 y `amtool` 0.34.1 y ejecuta:
 

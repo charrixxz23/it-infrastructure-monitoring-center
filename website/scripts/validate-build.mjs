@@ -13,6 +13,18 @@ assert.match(html, /<html[^>]+lang="es"/i, "built homepage should declare its in
 assert.match(html, /IT Infrastructure/);
 assert.match(html, /Monitoring Center/);
 assert.match(html, /Cloud deployment/);
+assert.match(html, /Evidencia operativa \(05-nov-2026; confirmaciones del propietario\)/, "the Spanish page should date and attribute the heartbeat evidence");
+assert.match(html, /Operational evidence \(2026-11-05; owner-confirmed\)/, "the English page should date and attribute the heartbeat evidence");
+assert.match(html, /la validación inicial todavía usaba la credencial original.*16:06:10.*16:07:09.*16:08:09/i, "the Spanish page should place the first three cycles before credential replacement");
+assert.match(html, /the initial validation still used the original credential.*16:06:10.*16:07:09.*16:08:09/i, "the English page should place the first three cycles before credential replacement");
+assert.match(html, /cuatro ciclos.*17:29:10.*17:30:10.*17:31:10.*17:32:10.*check nuevo apareció verde.*original dejó de recibir pings.*propietario confirmó su eliminación/i, "the Spanish page should describe the later replacement-check evidence and owner-confirmed deletion");
+assert.match(html, /four cycles were accepted.*17:29:10.*17:30:10.*17:31:10.*17:32:10.*new check appeared green.*original stopped receiving pings.*owner later confirmed deleting it/i, "the English page should describe the later replacement-check evidence and owner-confirmed deletion");
+assert.match(html, /evidencia histórica, no métricas en vivo ni garantía de disponibilidad/i, "the Spanish page should identify this as historical evidence");
+assert.match(html, /historical evidence, not live metrics or an availability guarantee/i, "the English page should identify this as historical evidence");
+assert.doesNotMatch(html, /sigue pendiente confirmar administrativamente.*check expuesto|administrative confirmation.*exposed check.*remains pending/i, "the page must not retain the resolved old-check status");
+assert.doesNotMatch(html, /validación externa pendiente|pending external validation|no está montada y aún no hay pings reales|no real pings have been sent/i, "the page must not retain superseded heartbeat status");
+assert(!/https?:\/\/hc-ping\.com\/[0-9a-f-]{36}/i.test(html), "the public page must not contain a provider Ping URL");
+assert(!/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i.test(html), "the public page must not contain a check UUID");
 assert.match(html, /data-locale-button="en"/);
 assert.equal((html.match(/<h1\b/gi) ?? []).length, 1, "homepage should have a single primary heading");
 assert.match(html, /id="real-network"/, "the real-world network section should be present");
@@ -79,6 +91,8 @@ const networkDocumentation = [
   "docs/runbooks/home-network.md",
   "docs/incidents/blackbox-exporter-preparation.md",
   "docs/phase-8-telegram-validation.md",
+  "docs/external-heartbeat.md",
+  "docs/runbooks/external-heartbeat.md",
   "docs/templates/home-network-postmortem.md",
   "config/grafana/dashboards/home-network-monitoring.json",
   "config/prometheus/rules/home-network.yml",

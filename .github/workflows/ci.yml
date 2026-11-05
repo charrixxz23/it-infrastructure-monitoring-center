@@ -47,6 +47,12 @@ jobs:
       - name: Test Container Exporter with mocked Docker CLI
         run: python -m unittest discover -s services/container-exporter -p 'test_*.py' -v
 
+      - name: Test external heartbeat agent with mocked HTTP responses
+        run: python -m unittest discover -s services/heartbeat-agent -p 'test_*.py' -v
+
+      - name: Test namespace-scoped heartbeat egress policy with synthetic DNS
+        run: python -m unittest discover -s services/heartbeat-egress-policy -p 'test_*.py' -v
+
       - name: Parse PowerShell scripts without executing them
         shell: pwsh
         run: ./scripts/ci/validate-powershell.ps1
@@ -112,7 +118,7 @@ jobs:
           ruff format --check scripts/ci
 
       - name: Lint YAML configuration
-        run: find .github config -type f \( -name '*.yml' -o -name '*.yaml' \) -print0 | xargs -0 yamllint
+        run: yamllint .github config compose.heartbeat.yaml
 
       - name: Audit Python dependency manifests
         run: |
@@ -165,6 +171,9 @@ jobs:
 
       - name: Validate Docker Compose without starting services
         run: python scripts/ci/validate_compose.py
+
+      - name: Validate optional external heartbeat security and scope
+        run: python scripts/ci/validate_heartbeat.py
 
       - name: Install exact Prometheus and Alertmanager validation binaries
         run: |
@@ -229,5 +238,6 @@ jobs:
             echo "- Docker Compose rendering with a disposable non-sensitive \`.env\`; no containers are started"
             echo '- Prometheus config, rules, and rule tests using the project-pinned promtool version'
             echo '- Alertmanager config using the project-pinned amtool version'
+            echo '- Optional heartbeat Compose override, security boundaries, and mocked-only tests; no provider account or ping is used'
             echo '- GitHub Actions workflow syntax and semantics'
           } >> "$GITHUB_STEP_SUMMARY"

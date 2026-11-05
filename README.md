@@ -38,6 +38,7 @@
 - Métricas de CPU, memoria, filesystem, red, uptime y disponibilidad de targets.
 - Reglas de alerta y registro persistente, rotado y local de eventos FIRING/RESOLVED.
 - Exporter opcional Python para CPU, memoria y red por contenedor del proyecto Compose.
+- Agente opcional de external heartbeat: solo envía éxito si Prometheus, Alertmanager, Grafana e Incident Logger responden; requiere opt-in local y una política de egreso revisada.
 - Pruebas unitarias y validaciones estáticas/configuración en GitHub Actions.
 
 ## Stack
@@ -51,6 +52,7 @@
 | Blackbox Exporter | 0.28.0 (digest fijado) | Sondas ICMP, DNS y HTTPS para monitoreo local de red |
 | Incident Logger | Python 3.13, biblioteca estándar | Webhook e historial local rotado |
 | Container Exporter | Python 3.10+, biblioteca estándar | Snapshot opcional de estadísticas Docker |
+| External Heartbeat | Python 3.13, biblioteca estándar | Dead-man's switch opt-in; operación real validada localmente con secreto ignorado por Git |
 
 ## Arquitectura y diagramas
 
@@ -67,6 +69,8 @@ El exporter de contenedores corre como proceso local de Windows, fuera de Docker
 | **Home Network Monitoring** | 13 | Prometheus / Blackbox Exporter | Provisionado automáticamente; la sonda del router requiere un archivo de targets local ignorado por Git |
 
 El dashboard de infraestructura presenta KPIs, tendencias, salud de targets y capacidad de los volúmenes relevantes. Las métricas de CPU, memoria, red y uptime de Node Exporter describen el **Linux del motor Docker Desktop/WSL2**, no el Windows físico. Sus etiquetas distinguen el volumen compartido **Windows C:** (/mnt/host/c) del **Docker virtual disk** (/mnt/docker-desktop-disk).
+
+La integración opcional de external heartbeat sigue siendo opt-in y no forma parte del Compose predeterminado. Comprueba cuatro endpoints HTTP del plano de monitoreo; no representa la disponibilidad de destinos de red, Node Exporter ni cada target. El propietario corrigió la cronología: la validación inicial aún usaba la credencial original; después reemplazó el secreto local y confirmó la eliminación del check anterior. La evidencia del check nuevo se resume abajo y en el [diseño y runbook](docs/external-heartbeat.md). El secreto vigente permanece fuera de Git. La política de egreso depende del supervisor y del host Docker/Windows; no es una allowlist aplicada por el firewall global de Windows.
 
 Los dos dashboards se leen desde config/grafana/dashboards/ mediante el proveedor de archivos en config/grafana/provisioning/dashboards/dashboard-provider.yml. Grafana los vuelve a cargar periódicamente; no es necesario importarlos a mano.
 
@@ -131,6 +135,14 @@ El dashboard Docker consulta métricas itmc_container_*; sus agregados se limita
 Este dashboard independiente sondea el router local configurado en un archivo ignorado por Git y los destinos aprobados `1.1.1.1` y `example.com`. DNS consulta A/AAAA de `example.com` directamente al resolver aprobado; HTTPS usa el hostname y su resolución depende de Docker Desktop, sin seguir redirecciones a otros hosts. En la validación operativa de esta rama, las cinco sondas configuradas y el scrape de Blackbox devolvieron muestras recientes exitosas. El historial solo comienza con la configuración activa y no representa disponibilidad anterior. `up` describe el scrape del exporter/endpoint; `probe_success` describe el resultado de una sonda. Una alerta `BlackboxExporterDown` indica una interrupción de monitorización y no demuestra una caída del ISP. Consulta el [runbook](docs/runbooks/home-network.md) y el [postmortem redactado de preparación](docs/incidents/blackbox-exporter-preparation.md). Windows y Docker Desktop/WSL2 deben permanecer encendidos para mantener la observación continua.
 
 Consulta [arquitectura y seguridad](docs/home-network-monitoring.md), [runbook](docs/runbooks/home-network.md), [notificaciones](docs/home-network-notifications.md) y [plantilla de postmortem](docs/templates/home-network-postmortem.md) para operar el monitoreo local. Windows y Docker Desktop/WSL2 deben permanecer encendidos para mantener la observación continua.
+
+### External heartbeat — operación opt-in validada
+
+**ES:** El agente sigue siendo opt-in y no se incluye en el Compose predeterminado. Comprueba Prometheus, Alertmanager, Grafana e Incident Logger y solo informa éxito tras cuatro respuestas saludables. El namespace de Squid combina su ACL con un filtro IPv4/IPv6 independiente y direcciones IPv4 dinámicas para el host autorizado en TCP/443. En la cronología corregida por el propietario, la validación inicial todavía usaba la credencial original: sus tres ciclos aceptados fueron a las 16:06:10, 16:07:09 y 16:08:09 UTC del 5 de noviembre de 2026. Después, el propietario creó un check nuevo, sustituyó el secreto local ignorado por Git y recreó únicamente `heartbeat-agent`. Informó que el agente llegó a `healthy` y que cuatro ciclos posteriores fueron aceptados a las 17:29:10, 17:30:10, 17:31:10 y 17:32:10 UTC; el check nuevo aparecía verde y recibiendo pings automáticos. El check original dejó de recibir pings, apareció `Down` y el propietario confirmó posteriormente que lo eliminó; no se proporcionó la hora de eliminación. Estos datos del proveedor y la cronología posterior son confirmaciones del propietario, no una consulta independiente ni métricas en vivo. El valor vigente permanece fuera de Git. La operación se limita a esos cuatro endpoints y no consulta las sondas domésticas ni envía métricas. El aislamiento no protege frente a un supervisor de política, Docker host o Windows comprometidos.
+
+**EN:** The agent remains opt-in and is not part of the default Compose stack. It checks Prometheus, Alertmanager, Grafana, and Incident Logger, and reports success only after all four health checks pass. Squid ACLs are backed by an independent IPv4/IPv6 filter in its shared network namespace, with dynamic IPv4 destinations for the approved host on TCP/443. In the owner's corrected timeline, the initial validation still used the original credential; its three accepted cycles were recorded at 16:06:10, 16:07:09, and 16:08:09 UTC on November 5, 2026. Later, the owner created a new check, replaced the Git-ignored local secret, and recreated only `heartbeat-agent`. The owner reported that the agent reached `healthy` and four subsequent cycles were accepted at 17:29:10, 17:30:10, 17:31:10, and 17:32:10 UTC; the new check appeared green and receiving automatic pings. The original check stopped receiving pings, appeared `Down`, and the owner later confirmed deleting it; no deletion time was provided. Provider state and the later timeline are owner-confirmed, not independently queried or live metrics. The current secret remains outside Git. This monitors only those four endpoints and does not inspect home probes or send metrics. The isolation does not protect against a compromised policy supervisor, Docker host, or Windows host.
+
+See the [external heartbeat design, evidence, and residual risks](docs/external-heartbeat.md) and the [operational, troubleshooting, and rotation runbook](docs/runbooks/external-heartbeat.md). Option B uses internal agent networks, a separate proxy-namespace firewall, and Squid's exact-host/port policy. No host firewall rule was changed. The owner-reported real cycles and provider notifications are summarized in the design document; their exact Down/Up transition timing and cause were not recorded.
 
 ## Monitoreo y alertas
 
@@ -220,7 +232,9 @@ Desde PowerShell, con herramientas CI instaladas según [docs/ci.md](docs/ci.md)
 python -m compileall -q services scripts
 python -m unittest discover -s services/incident-logger -p 'test_*.py' -v
 python -m unittest discover -s services/container-exporter -p 'test_*.py' -v
+python -m unittest discover -s services/heartbeat-agent -p 'test_*.py' -v
 python scripts/ci/validate_dashboards.py
+python scripts/ci/validate_heartbeat.py
 python scripts/ci/check_repo_hygiene.py
 python scripts/ci/validate_compose.py
 .\scripts\validate.ps1
@@ -234,6 +248,8 @@ Con Docker Desktop activo, scripts/validate.ps1 comprueba el entorno local, las 
 - **Se eligió un exporter host-side en Python.** Usa Docker CLI desde Windows, filtra por etiqueta Compose y consulta snapshots de estadísticas. Ningún contenedor recibe el socket.
 - **El exporter sigue teniendo privilegios importantes.** El proceso hereda el acceso Docker del usuario; una modificación o vulnerabilidad podría abusar del daemon. Ejecuta solo código confiable y detén el proceso cuando no lo uses.
 - **Loopback y host.docker.internal tienen alcances distintos.** El proceso escucha solo en 127.0.0.1; Docker Desktop proxifica el camino desde la red de contenedores. Esa ruta no autentica al cliente y otros contenedores locales podrían leer el endpoint acotado.
+- **External heartbeat sigue siendo opt-in.** No publica puertos al host y su health endpoint enlaza a `127.0.0.1`. El agente depende del supervisor privilegiado y del host Docker/Windows; la red bridge no es una allowlist y no se aplicaron reglas al firewall global. El secreto bearer se monta como archivo de solo lectura y permanece fuera de Git.
+- **Evidencia del proveedor.** El propietario confirmó la transición `Down → Up`, los pings y correos de caída/recuperación, y posteriormente la eliminación del check original tras reemplazar la credencial. No se registró la hora de eliminación ni el momento o causa exactos de la transición. Una caída completa de Windows, Docker Desktop o Internet puede impedir tanto los pings como las notificaciones oportunas.
 - **No es monitoreo del Windows físico.** Node Exporter mide el Linux visible al daemon. Para CPU/RAM del host Windows haría falta instrumentación específica de Windows, fuera del alcance actual.
 - Laboratorio local sin TLS ni autenticación de producción para Prometheus/Alertmanager. Mantén sus interfaces ligadas a loopback.
 
@@ -246,6 +262,8 @@ Con Docker Desktop activo, scripts/validate.ps1 comprueba el entorno local, las 
 - [Runbook de red doméstica](docs/runbooks/home-network.md)
 - [Operación de notificaciones Telegram](docs/home-network-notifications.md)
 - [Validación local del ciclo Telegram de Fase 8](docs/phase-8-telegram-validation.md)
+- [Diseño y seguridad del external heartbeat](docs/external-heartbeat.md)
+- [Runbook de activación y rollback del external heartbeat](docs/runbooks/external-heartbeat.md)
 - [Plantilla de postmortem doméstico](docs/templates/home-network-postmortem.md)
 - [Informe redactado del incidente de preparación de Blackbox](docs/incidents/blackbox-exporter-preparation.md)
 - [Evaluación de seguridad de cAdvisor](docs/container-monitoring-assessment.md)

@@ -97,6 +97,10 @@ def main() -> int:
             "ci-placeholder-not-a-credential", encoding="utf-8"
         )
         (temporary_secrets / "telegram-chat-id").write_text("0", encoding="utf-8")
+        (temporary_secrets / "healthchecks-ping-url").write_text(
+            "https://hc-ping.com/00000000-0000-0000-0000-000000000001\n",
+            encoding="utf-8",
+        )
         try:
             subprocess.run(
                 [
@@ -127,8 +131,38 @@ def main() -> int:
             )
             return error.returncode or 1
 
+        optional_overrides = [
+            ["compose.yaml", "compose.heartbeat.yaml"],
+            ["compose.yaml", "compose.telegram.yaml", "compose.heartbeat.yaml"],
+        ]
+        for override_files in optional_overrides:
+            command = [docker, "compose"]
+            for compose_file in override_files:
+                command.extend(["-f", compose_file])
+            command.extend(["config", "--quiet"])
+            try:
+                subprocess.run(
+                    command,
+                    cwd=project_copy,
+                    check=True,
+                    timeout=30,
+                )
+            except subprocess.TimeoutExpired:
+                print(
+                    "ERROR: optional heartbeat Compose validation exceeded its 30-second timeout.",
+                    file=sys.stderr,
+                )
+                return 1
+            except subprocess.CalledProcessError as error:
+                print(
+                    "ERROR: optional heartbeat Compose configuration failed with exit code "
+                    f"{error.returncode}.",
+                    file=sys.stderr,
+                )
+                return error.returncode or 1
+
     print(
-        "PASS: default and opt-in Compose configurations rendered with disposable non-sensitive CI files; no services were started."
+        "PASS: default, Telegram, heartbeat, and combined Compose configurations rendered with disposable CI files; no services were started."
     )
     return 0
 

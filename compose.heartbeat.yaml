@@ -1,0 +1,132 @@
+# Opt-in only. The default Compose stack does not load this agent or require a
+# Healthchecks.io account, check, or Ping URL.
+services:
+  heartbeat-agent:
+    build:
+      context: ./services/heartbeat-agent
+    init: true
+    restart: unless-stopped
+    environment:
+      HEARTBEAT_PING_URL_FILE: /run/secrets/healthchecks_ping_url
+      HEARTBEAT_INTERVAL_SECONDS: "60"
+      HEARTBEAT_COMPONENT_TIMEOUT_SECONDS: "3"
+      HEARTBEAT_PING_TIMEOUT_SECONDS: "5"
+      HEARTBEAT_HEALTH_PORT: "9740"
+      HEARTBEAT_GUARD_STARTUP_TIMEOUT_SECONDS: "120"
+    volumes:
+      - type: bind
+        source: ./.secrets/healthchecks-ping-url
+        target: /run/secrets/healthchecks_ping_url
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/heartbeat/resolv.conf
+        target: /etc/resolv.conf
+        read_only: true
+    networks:
+      monitoring: {}
+      heartbeat-proxy-private:
+        ipv4_address: 172.31.255.251
+    depends_on:
+      heartbeat-egress-proxy:
+        condition: service_started
+        restart: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - KILL
+      - NET_ADMIN
+      - NET_BIND_SERVICE
+      - SETPCAP
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=1m
+    cpus: 0.10
+    mem_limit: 96m
+    pids_limit: 32
+    healthcheck:
+      test: ["CMD", "/bin/busybox", "wget", "-q", "-T", "2", "-O", "/dev/null", "http://127.0.0.1:9740/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 75s
+
+  heartbeat-egress-policy:
+    build:
+      context: ./services/heartbeat-egress-policy
+    init: true
+    restart: unless-stopped
+    networks:
+      heartbeat-proxy-private:
+        ipv4_address: 172.31.255.250
+      heartbeat-proxy-uplink: {}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_ADMIN
+      - NET_BIND_SERVICE
+      - SETUID
+      - SETGID
+      - KILL
+    read_only: true
+    tmpfs:
+      - /run:rw,noexec,nosuid,size=4m
+      - /tmp:rw,noexec,nosuid,size=1m
+    cpus: 0.10
+    mem_limit: 64m
+    pids_limit: 16
+    healthcheck:
+      test: ["CMD", "/bin/busybox", "test", "-f", "/run/heartbeat-egress-policy-ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  heartbeat-egress-proxy:
+    image: ubuntu/squid@sha256:6a097f68bae708cedbabd6188d68c7e2e7a38cedd05a176e1cc0ba29e3bbe029
+    restart: unless-stopped
+    user: "13:13"
+    command: ["-f", "/etc/squid/squid.conf", "-NYC"]
+    network_mode: service:heartbeat-egress-policy
+    depends_on:
+      heartbeat-egress-policy:
+        condition: service_healthy
+        restart: true
+    volumes:
+      - type: bind
+        source: ./config/heartbeat/squid.conf
+        target: /etc/squid/squid.conf
+        read_only: true
+      - type: bind
+        source: ./config/heartbeat/resolv.conf
+        target: /etc/resolv.conf
+        read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /run:rw,noexec,nosuid,size=8m,uid=13,gid=13
+      - /tmp:rw,noexec,nosuid,size=16m,uid=13,gid=13
+      - /var/log/squid:rw,noexec,nosuid,size=8m,uid=13,gid=13
+      - /var/spool/squid:rw,noexec,nosuid,size=16m,uid=13,gid=13
+
+networks:
+  heartbeat-proxy-private:
+    name: itmc-heartbeat-proxy-private
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.31.255.248/29
+  heartbeat-proxy-uplink:
+    name: itmc-heartbeat-proxy-uplink
+    driver: bridge
