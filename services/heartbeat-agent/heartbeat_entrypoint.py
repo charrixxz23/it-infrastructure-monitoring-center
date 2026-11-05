@@ -148,6 +148,7 @@ def write_dnsmasq_files(services: dict[str, tuple[str, ...]]) -> None:
             (
                 "no-resolv",
                 "no-hosts",
+                "domain-needed",
                 "pid-file=/tmp/heartbeat-dnsmasq.pid",
                 "bind-interfaces",
                 f"listen-address={LOCAL_DNS}",

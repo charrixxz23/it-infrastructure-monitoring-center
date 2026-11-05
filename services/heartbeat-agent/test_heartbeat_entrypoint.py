@@ -79,11 +79,15 @@ class HeartbeatEntrypointTests(unittest.TestCase):
                 with self.assertRaises(guard.GuardError):
                     guard.validate_service_addresses((invalid,))
 
-    def test_docker_dns_helper_rejects_non_allowlisted_names_without_querying(self) -> None:
-        with patch.object(guard.socket, "socket") as create_socket:
-            with self.assertRaises(guard.GuardError):
-                guard.dns_query_a("hc-ping.com", guard.DNS_SERVER)
-        create_socket.assert_not_called()
+    def test_docker_dns_helper_rejects_non_allowlisted_names_without_querying(
+        self,
+    ) -> None:
+        for hostname in ("unapproved", "hc-ping.com"):
+            with self.subTest(hostname=hostname):
+                with patch.object(guard.socket, "socket") as create_socket:
+                    with self.assertRaises(guard.GuardError):
+                        guard.dns_query_a(hostname, guard.DNS_SERVER)
+                create_socket.assert_not_called()
 
     def test_final_firewall_allows_only_named_service_ports_and_proxy(self) -> None:
         commands = guard.build_final_firewall_commands(SERVICES)
@@ -246,9 +250,11 @@ class HeartbeatEntrypointTests(unittest.TestCase):
 
         self.assertIn("no-resolv\n", configuration)
         self.assertIn("no-hosts\n", configuration)
+        self.assertIn("domain-needed\n", configuration)
         self.assertNotIn("\nserver=", configuration)
-        self.assertIn("172.20.0.10 prometheus\n", hosts)
-        self.assertIn("172.20.0.13 incident-logger\n", hosts)
+        records = {line.split()[1] for line in hosts.splitlines()}
+        self.assertEqual(records, set(guard.DNS_HOSTS))
+        self.assertEqual(len(hosts.splitlines()), len(guard.DNS_HOSTS))
         self.assertNotIn("hc-ping.com", hosts)
 
     def test_service_ip_refresh_keeps_temporary_union_then_tightens(self) -> None:

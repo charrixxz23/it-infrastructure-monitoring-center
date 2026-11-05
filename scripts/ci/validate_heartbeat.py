@@ -457,7 +457,12 @@ def validate_agent() -> list[str]:
         errors.append(
             "firewall setup must retain a terminal deny and abort on rule failures"
         )
-    if "server=" in guard or "no-resolv" not in guard or "no-hosts" not in guard:
+    if (
+        "server=" in guard
+        or "no-resolv" not in guard
+        or "no-hosts" not in guard
+        or '"domain-needed"' not in guard
+    ):
         errors.append("local DNS must have no external upstream or host-file fallback")
     if "127.0.0.11" not in guard or '"--uid-owner",\n            "0"' not in guard:
         errors.append("only the root supervisor may query Docker's embedded DNS")
