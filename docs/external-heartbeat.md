@@ -1,6 +1,6 @@
 # External heartbeat — design and security
 
-**Status:** option B includes the agent-namespace firewall and Squid ACL, plus a separate firewall in Squid's shared network namespace. It dynamically allows current public IPv4 answers for the exact `hc-ping.com` hostname on TCP/443 and denies IPv6 and other egress. Synthetic runtime tests verified permitted and denied routes. Separately, the owner authorized and ran a limited external DNS + CONNECT + TLS test to `hc-ping.com:443`; it returned `PASS: CONNECT and TLS verified; no HTTP request or Ping URL was sent.` The policy supervisor and proxy were started temporarily and then stopped. The supervisor was initially observed as `starting`; no independent evidence confirms it reached `healthy`. The temporary client used UID/GID 65534, no capabilities, and a read-only filesystem. The heartbeat agent never started and no ping was sent. The owner reports that the six original ITMC services remained healthy. The Ping URL is not stored locally or mounted into Docker. Real heartbeat behavior, missed-ping notification, and recovery remain untested; the feature stays opt-in. Docker Desktop/WSL2 host egress and the policy supervisor remain trusted boundaries.
+**Status (2026-11-05):** the opt-in heartbeat is active on the owner's Windows/Docker Desktop host. A read-only Docker inspection confirmed all six core ITMC services, Heartbeat Agent, and Heartbeat Egress Policy healthy; Squid was running. The owner reports the Ping URL was rotated after the previous value was exposed, and that the running agent uses the replacement. No secret value or check identifier is included here. Three consecutive owner-recorded cycles were healthy and accepted by the provider at 16:06:10, 16:07:09, and 16:08:09 UTC. The owner also confirmed automatic pings, a Healthchecks.io `Down → Up` transition, and receipt of both loss and recovery emails. The precise transition time, duration, and cause were not recorded. The isolated DNS regression probe passed, and CI for `f4a8bc5` passed all five jobs for both push and pull request. The policy supervisor/Windows host remain trusted boundaries; this evidence does not establish a host-level egress perimeter or guarantee continuous availability.
 
 ## Purpose and scope
 
@@ -85,9 +85,9 @@ Provider IPs are learned from Docker's embedded DNS; the response source IP and 
 
 ## Secret handling
 
-The Ping URL is a bearer secret. The only supported source is `.secrets/healthchecks-ping-url`, covered by the repository ignore rule and mounted read-only at `/run/secrets/healthchecks_ping_url`. The local file is currently absent. No secret is stored in Compose environment values, CI, source control, the website, or logs. The agent requires HTTPS, the exact `hc-ping.com` host, the expected port, no user information/query/fragment, and a UUID path.
+The Ping URL is a bearer secret. The supported local source is `.secrets/healthchecks-ping-url`, covered by the repository ignore rule and mounted read-only at `/run/secrets/healthchecks_ping_url`. The owner reports that a replacement value is configured locally after the previous value was exposed; this audit did not open or read the file. No secret is stored in Compose environment values, CI, source control, the website, or this documentation. The agent requires HTTPS, the exact `hc-ping.com` host, the expected port, no user information/query/fragment, and a UUID path.
 
-Application logs never print the Ping URL, request URL, response body, or raw network exception. The provider necessarily sees its request path and the public NAT egress IP. The request body contains no local address, SSID, MAC, component detail, or metric. Protect the file with reviewed Windows ACLs that retain required SYSTEM, Administrators, owner, and Docker Desktop access; do not remove inherited entries indiscriminately. Rotate/delete the provider check if the URL is exposed.
+Application logs never print the Ping URL, request URL, response body, or raw network exception. The provider necessarily sees its request path and the public NAT egress IP. The request body contains no local address, SSID, MAC, component detail, or metric. Protect the file with reviewed Windows ACLs that retain required SYSTEM, Administrators, owner, and Docker Desktop access; do not remove inherited entries indiscriminately. If the URL is exposed, rotate it through the authorized provider UI; the owner decides separately whether to retire the old check.
 
 ## Schedule and failure behavior
 
@@ -95,11 +95,26 @@ Application logs never print the Ping URL, request URL, response body, or raw ne
 - It sends a GET success ping only if every local check passes. Local failure sends no success ping; the next cycle retries. There is no offline queue.
 - Provider success requires HTTP 200 and the exact response body `OK`; redirects and other 200 responses are rejected.
 - The loop starts immediately, then targets a 60-second interval between cycle starts. Accepted settings are bounded.
-- The owner reports a 2-minute provider period, 2-minute grace, and email notification. These settings and delivery have not been independently validated.
+- The owner reports that the provider check uses a 2-minute period and 2-minute grace, with email notification enabled. The owner confirmed receiving loss and recovery messages; this repository audit did not access the provider account.
 - On total Internet loss, the sender cannot reach Healthchecks.io. It retries on later cycles; a later successful cycle clears the missed state. The provider cannot deliver a notification through an unavailable provider/channel.
 - Alertmanager and Incident Logger are checked for HTTP health. The agent does not send alerts, modify Prometheus, or inspect incident records.
 
-Healthchecks.io documents its [Ping API](https://healthchecks.io/docs/http_api/) and [check period/grace](https://healthchecks.io/docs/configuring_checks/). The limited test below contacted provider DNS and established CONNECT/TLS to port 443, but sent no HTTP request, Ping URL, or heartbeat.
+Healthchecks.io documents its [Ping API](https://healthchecks.io/docs/http_api/) and [check period/grace](https://healthchecks.io/docs/configuring_checks/). The earlier limited DNS + CONNECT/TLS test contacted the provider hostname but sent no HTTP request, Ping URL, or heartbeat. Later real heartbeat evidence is recorded below.
+
+## Final operational validation — 2026-11-05
+
+Evidence is separated by source so owner-reported provider events are not presented as independently queried account data.
+
+| Evidence | Result and source |
+|---|---|
+| Current Docker state | Read-only local inspection found the six core ITMC services healthy, Heartbeat Agent healthy, Heartbeat Egress Policy healthy, and Squid running. Squid has no Docker healthcheck, so `running` reports process state only. |
+| DNS compatibility | The isolated PowerShell 5.1 probe passed in Docker Desktop/WSL2 using Alpine, dnsmasq 2.92, and musl. It verified four synthetic A records, four AAAA `NOERROR/NODATA` answers, `getaddrinfo(AF_UNSPEC)` and `AF_INET`, and rejection of unapproved names. The probe container used `--network none`; it sent no external traffic. |
+| Accepted heartbeat cycles | Owner-provided sanitized cycle records show `cycle healthy; success ping accepted` at **2026-11-05 16:06:10 UTC**, **16:07:09 UTC**, and **16:08:09 UTC**. These consecutive cycles were 59 and 60 seconds apart. |
+| Provider detection and notification | The owner confirmed Healthchecks.io recorded automatic pings and a `Down → Up` transition, and confirmed receiving the loss and recovery emails. No exact transition timestamp, outage duration, or cause was supplied, so none is inferred here. |
+| Secret rotation | The owner reports that a replacement Ping URL was configured after the previous value was exposed and that the active agent uses the replacement. The value was not read during this audit and is not stored in the repository or this document. |
+| CI for `f4a8bc5` | All five CI jobs succeeded for the [push run](https://github.com/charrixxz23/it-infrastructure-monitoring-center/actions/runs/42057914601) and the [PR run](https://github.com/charrixxz23/it-infrastructure-monitoring-center/actions/runs/42057926936). |
+
+This evidence confirms successful operation at the recorded times, not a service-level availability guarantee. The observed provider transition was not deliberately induced during this documentation update. A future full ISP/Docker Desktop outage can still prevent pings and delay or prevent notification delivery.
 
 ## Isolated runtime audit — 2026-11-04
 
@@ -119,8 +134,8 @@ The namespace-filter check used disposable containers on a separate dual-stack b
 
 The existing home-network privacy validator initially rejected the heartbeat's generic private proxy/test literals. It now exempts only exact literals in the specific heartbeat configuration and test files; a focused check confirmed that an unrelated private LAN address in the same candidate file still fails.
 
-The synthetic runtime test establishes that the namespace rules can allow one test route and drop competing routes on this Docker Desktop/WSL2 kernel. The owner-run DNS + CONNECT + TLS check separately confirms that the approved hostname path and certificate-verified TLS handshake worked at that moment. It does not prove future CDN/DNS stability, a successful heartbeat ping, missed-heartbeat notification, recovery, or live Compose recreation behavior. The supervisor's transition from `starting` to `healthy` was not independently captured. The Windows host/Docker Desktop backend and policy supervisor remain trusted boundaries; this is not a host-level allowlist and does not protect against either being compromised. Keep real heartbeat activation opt-in until the health-state evidence and residual risks are reviewed and an owner explicitly approves use of the Ping URL.
+The synthetic runtime test establishes that the namespace rules can allow one test route and drop competing routes on this Docker Desktop/WSL2 kernel. The owner-run DNS + CONNECT + TLS check separately confirms that the approved hostname path and certificate-verified TLS handshake worked at that moment. That earlier test did not prove heartbeat pings or provider notifications. The later operational evidence above records accepted pings and owner-confirmed detection/notification. It does not prove future CDN/DNS stability, a precise outage duration, or live Compose recreation behavior. The policy supervisor and Windows host/Docker Desktop backend remain trusted boundaries; this is not a host-level allowlist and does not protect against either being compromised.
 
-The policy unit suite uses local fake DNS responses; repository validators are static checks. The disposable Docker test is separate runtime evidence for the namespace filter, and the owner-run external DNS + CONNECT/TLS check is evidence for the permitted provider path at test time. Neither proves a Windows host perimeter. The local Ping URL remains absent; no live ping, missed-heartbeat test, or recovery test is part of this phase.
+The policy unit suite uses local fake DNS responses; repository validators are static checks. The disposable Docker test is separate runtime evidence for the namespace filter, and the owner-run external DNS + CONNECT/TLS check is evidence for the permitted provider path at test time. The 2026-11-04 audit was performed before the heartbeat agent was activated; its statements that no ping had been sent and that the local secret was absent are historical. The 2026-11-05 evidence above supersedes those runtime statements. Neither test suite proves a Windows host perimeter or immunity to a compromised policy supervisor or Docker host.
 
 See the [activation and rollback runbook](runbooks/external-heartbeat.md).
