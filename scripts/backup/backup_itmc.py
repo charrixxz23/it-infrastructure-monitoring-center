@@ -10,10 +10,12 @@ import math
 import os
 import shutil
 import stat
+import struct
 import subprocess
 import sys
 import tempfile
 import zipfile
+import zlib
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable
@@ -24,6 +26,13 @@ PROJECT_LABEL = "it-infrastructure-monitoring-center"
 MANIFEST_NAME = "itmc-backup-manifest.json"
 MAX_FILES = 5000
 MAX_SOURCE_BYTES = 512 * 1024 * 1024
+MAX_ARCHIVE_ENTRIES = MAX_FILES + 1
+MAX_MANIFEST_BYTES = 4 * 1024 * 1024
+MAX_TOTAL_UNCOMPRESSED_BYTES = MAX_SOURCE_BYTES + MAX_MANIFEST_BYTES
+MAX_ARCHIVE_BYTES = MAX_TOTAL_UNCOMPRESSED_BYTES + 64 * 1024 * 1024
+MAX_CENTRAL_DIRECTORY_BYTES = 32 * 1024 * 1024
+MAX_MEMBER_NAME_BYTES = 4096
+STREAM_CHUNK_BYTES = 64 * 1024
 DISK_MARGIN_BYTES = 4 * 1024 * 1024
 DISK_MARGIN_RATIO = 0.05
 
@@ -140,8 +149,10 @@ def _safe_archive_path(name: str) -> bool:
     if not name or "\\" in name or ":" in name or name.startswith("/"):
         return False
     parsed = PurePosixPath(name)
-    return not parsed.is_absolute() and all(
-        part not in {"", ".", ".."} for part in parsed.parts
+    return (
+        name == parsed.as_posix()
+        and not parsed.is_absolute()
+        and all(part not in {"", ".", ".."} for part in parsed.parts)
     )
 
 
@@ -477,32 +488,403 @@ def write_bundle(path: Path, files: dict[str, bytes], manifest: dict[str, Any]) 
         ) from exc
 
 
+def _preflight_zip(path: Path) -> tuple[list[dict[str, Any]], int]:
+    """Bound central-directory parsing before ZipFile allocates ZipInfo objects."""
+    try:
+        file_size = path.stat().st_size
+        if file_size > MAX_ARCHIVE_BYTES:
+            raise BackupError(
+                "The archive exceeds the configured compressed size limit."
+            )
+        if file_size < 22:
+            raise BackupError("The archive is too short to contain a ZIP directory.")
+
+        tail_size = min(file_size, 22 + 65535)
+        with path.open("rb") as raw:
+            raw.seek(file_size - tail_size)
+            tail = raw.read(tail_size)
+            signature = b"PK\x05\x06"
+            offset = tail.rfind(signature)
+            end_record: tuple[int, ...] | None = None
+            while offset >= 0:
+                if offset + 22 <= len(tail):
+                    candidate = struct.unpack_from("<4s4H2LH", tail, offset)
+                    if offset + 22 + candidate[7] == len(tail):
+                        end_record = candidate
+                        break
+                offset = tail.rfind(signature, 0, offset)
+            if end_record is None:
+                raise BackupError("The archive has no valid ZIP end directory record.")
+
+            (
+                _,
+                disk,
+                directory_disk,
+                disk_entries,
+                entry_count,
+                directory_size,
+                directory_offset,
+                _comment_size,
+            ) = end_record
+            if (
+                disk != 0
+                or directory_disk != 0
+                or disk_entries != entry_count
+                or entry_count in {0, 0xFFFF}
+                or directory_size == 0xFFFFFFFF
+                or directory_offset == 0xFFFFFFFF
+            ):
+                raise BackupError("Multi-disk and ZIP64 archives are not supported.")
+            if entry_count > MAX_ARCHIVE_ENTRIES:
+                raise BackupError("The archive contains too many entries.")
+            if directory_size > MAX_CENTRAL_DIRECTORY_BYTES:
+                raise BackupError("The archive central directory is too large.")
+
+            end_offset = file_size - tail_size + offset
+            directory_start = end_offset - directory_size
+            concat_offset = directory_start - directory_offset
+            if directory_start < 0 or concat_offset < 0:
+                raise BackupError("The archive directory offsets are invalid.")
+
+            raw.seek(directory_start)
+            directory_end = end_offset
+            entries: list[dict[str, Any]] = []
+            seen_names: set[str] = set()
+            declared_total = 0
+            central_header = struct.Struct("<4s6H3I5H2I")
+            for _ in range(entry_count):
+                if raw.tell() + central_header.size > directory_end:
+                    raise BackupError(
+                        "The archive entry count exceeds its directory size."
+                    )
+                fixed = raw.read(central_header.size)
+                if len(fixed) != central_header.size:
+                    raise BackupError("The archive central directory is truncated.")
+                values = central_header.unpack(fixed)
+                if values[0] != b"PK\x01\x02":
+                    raise BackupError("The archive central directory is invalid.")
+
+                flags = values[3]
+                compression = values[4]
+                compressed_size = values[8]
+                uncompressed_size = values[9]
+                name_size, extra_size, comment_size, disk_start = values[10:14]
+                external_attributes = values[15]
+                local_offset = values[16]
+                if name_size == 0 or name_size > MAX_MEMBER_NAME_BYTES:
+                    raise BackupError(
+                        "An archive entry has an invalid or excessive path length."
+                    )
+                if raw.tell() + name_size + extra_size + comment_size > directory_end:
+                    raise BackupError(
+                        "An archive directory entry exceeds directory bounds."
+                    )
+                if (
+                    compressed_size == 0xFFFFFFFF
+                    or uncompressed_size == 0xFFFFFFFF
+                    or local_offset == 0xFFFFFFFF
+                ):
+                    raise BackupError("ZIP64 entries are not supported.")
+                if disk_start != 0 or compression not in {
+                    zipfile.ZIP_STORED,
+                    zipfile.ZIP_DEFLATED,
+                }:
+                    raise BackupError(
+                        "An archive entry uses an unsupported layout or compression method."
+                    )
+                allowed_flags = 0x0800 | (
+                    0x0006 if compression == zipfile.ZIP_DEFLATED else 0
+                )
+                if flags & ~allowed_flags:
+                    raise BackupError(
+                        "Encrypted or descriptor-based ZIP entries are not supported."
+                    )
+
+                encoded_name = raw.read(name_size)
+                extra = raw.read(extra_size)
+                comment = raw.read(comment_size)
+                if (
+                    len(encoded_name) != name_size
+                    or len(extra) != extra_size
+                    or len(comment) != comment_size
+                ):
+                    raise BackupError(
+                        "The archive central directory contains a truncated entry."
+                    )
+                encoding = "utf-8" if flags & 0x0800 else "cp437"
+                name = encoded_name.decode(encoding)
+                if name in seen_names:
+                    raise BackupError("The archive contains duplicate entry names.")
+                seen_names.add(name)
+
+                extra_offset = 0
+                while extra_offset < len(extra):
+                    if extra_offset + 4 > len(extra):
+                        raise BackupError(
+                            "An archive entry has malformed extended metadata."
+                        )
+                    extra_id, extra_length = struct.unpack_from(
+                        "<HH", extra, extra_offset
+                    )
+                    extra_offset += 4
+                    if extra_offset + extra_length > len(extra) or extra_id == 0x0001:
+                        raise BackupError(
+                            "ZIP64 or malformed extended metadata is not supported."
+                        )
+                    extra_offset += extra_length
+
+                if name != MANIFEST_NAME and (
+                    not _safe_archive_path(name)
+                    or not _in_scope(name)
+                    or _is_excluded(name)
+                ):
+                    raise BackupError(
+                        "The archive contains an unsafe or out-of-scope path."
+                    )
+                mode = (external_attributes >> 16) & 0xFFFF
+                if stat.S_ISLNK(mode) or stat.S_ISDIR(mode):
+                    raise BackupError("The archive contains a link or directory entry.")
+                member_limit = (
+                    MAX_MANIFEST_BYTES if name == MANIFEST_NAME else MAX_SOURCE_BYTES
+                )
+                if uncompressed_size > member_limit:
+                    raise BackupError(
+                        "An archive entry exceeds the uncompressed size limit."
+                    )
+                declared_total += uncompressed_size
+                if declared_total > MAX_TOTAL_UNCOMPRESSED_BYTES:
+                    raise BackupError(
+                        "The archive exceeds the total uncompressed size limit."
+                    )
+
+                physical_local_offset = local_offset + concat_offset
+                if (
+                    physical_local_offset < 0
+                    or physical_local_offset + 30 > directory_start
+                ):
+                    raise BackupError(
+                        "An archive entry has an invalid local-header offset."
+                    )
+                entries.append(
+                    {
+                        "name": name,
+                        "encoded_name": encoded_name,
+                        "flags": flags,
+                        "compression": compression,
+                        "crc": values[7],
+                        "compressed_size": compressed_size,
+                        "uncompressed_size": uncompressed_size,
+                        "external_attributes": external_attributes,
+                        "header_offset": physical_local_offset,
+                    }
+                )
+
+            if raw.tell() != directory_end:
+                raise BackupError(
+                    "The archive entry count does not match its directory size."
+                )
+            if MANIFEST_NAME not in seen_names:
+                raise BackupError("The archive has no unique manifest.")
+            return entries, directory_start
+    except BackupError:
+        raise
+    except (OSError, struct.error, UnicodeError, OverflowError, ValueError) as exc:
+        raise BackupError("The archive directory is invalid or corrupt.") from exc
+
+
+def _stream_zip_member(
+    raw: Any,
+    member: zipfile.ZipInfo,
+    metadata: dict[str, Any],
+    *,
+    directory_start: int,
+    total_so_far: int,
+) -> tuple[int, str, bytes | None, int]:
+    """Read one member with actual decompressed-byte limits and a streaming hash."""
+    name = metadata["name"]
+    member_limit = MAX_MANIFEST_BYTES if name == MANIFEST_NAME else MAX_SOURCE_BYTES
+    local_header = struct.Struct("<4s5H3I2H")
+    raw.seek(metadata["header_offset"])
+    fixed = raw.read(local_header.size)
+    if len(fixed) != local_header.size:
+        raise BackupError("An archive local header is truncated.")
+    values = local_header.unpack(fixed)
+    if values[0] != b"PK\x03\x04":
+        raise BackupError("An archive local header is invalid.")
+    flags, compression = values[2], values[3]
+    crc, compressed_size, uncompressed_size = values[6:9]
+    name_size, extra_size = values[9:11]
+    if (
+        flags != metadata["flags"]
+        or compression != metadata["compression"]
+        or crc != metadata["crc"]
+        or compressed_size != metadata["compressed_size"]
+        or uncompressed_size != metadata["uncompressed_size"]
+        or name_size != len(metadata["encoded_name"])
+    ):
+        raise BackupError("The archive local and central headers do not match.")
+    if raw.tell() + name_size + extra_size > directory_start:
+        raise BackupError("An archive local header exceeds directory bounds.")
+    local_name = raw.read(name_size)
+    extra = raw.read(extra_size)
+    if local_name != metadata["encoded_name"] or len(extra) != extra_size:
+        raise BackupError("The archive local path or extended metadata is invalid.")
+    extra_offset = 0
+    while extra_offset < len(extra):
+        if extra_offset + 4 > len(extra):
+            raise BackupError(
+                "An archive local header has malformed extended metadata."
+            )
+        extra_id, extra_length = struct.unpack_from("<HH", extra, extra_offset)
+        extra_offset += 4
+        if extra_offset + extra_length > len(extra) or extra_id == 0x0001:
+            raise BackupError("ZIP64 or malformed local metadata is not supported.")
+        extra_offset += extra_length
+
+    data_start = raw.tell()
+    compressed_end = data_start + metadata["compressed_size"]
+    if compressed_end > directory_start:
+        raise BackupError("An archive member overlaps the central directory.")
+    if (
+        member.filename != name
+        or member.header_offset != metadata["header_offset"]
+        or member.compress_type != compression
+        or member.file_size != uncompressed_size
+        or member.compress_size != compressed_size
+        or member.CRC != crc
+        or stat.S_ISLNK((metadata["external_attributes"] >> 16) & 0xFFFF)
+    ):
+        raise BackupError("An archive entry has inconsistent or unsafe metadata.")
+
+    digest = hashlib.sha256()
+    crc_actual = 0
+    member_bytes = 0
+    total_bytes = total_so_far
+    collected = bytearray() if name == MANIFEST_NAME else None
+
+    def consume(data: bytes) -> None:
+        nonlocal crc_actual, member_bytes, total_bytes
+        if member_bytes + len(data) > member_limit:
+            raise BackupError(
+                "An archive entry exceeds the actual uncompressed size limit."
+            )
+        if total_bytes + len(data) > MAX_TOTAL_UNCOMPRESSED_BYTES:
+            raise BackupError(
+                "The archive exceeds the actual total uncompressed size limit."
+            )
+        member_bytes += len(data)
+        total_bytes += len(data)
+        crc_actual = zlib.crc32(data, crc_actual)
+        digest.update(data)
+        if collected is not None:
+            collected.extend(data)
+
+    def output_limit() -> int:
+        return min(
+            STREAM_CHUNK_BYTES,
+            member_limit - member_bytes + 1,
+            MAX_TOTAL_UNCOMPRESSED_BYTES - total_bytes + 1,
+        )
+
+    raw.seek(data_start)
+    remaining_compressed = metadata["compressed_size"]
+    if compression == zipfile.ZIP_STORED:
+        if metadata["compressed_size"] != metadata["uncompressed_size"]:
+            raise BackupError("A stored archive member has inconsistent sizes.")
+        while remaining_compressed:
+            block = raw.read(min(STREAM_CHUNK_BYTES, remaining_compressed))
+            if not block:
+                raise BackupError("A stored archive member is truncated.")
+            remaining_compressed -= len(block)
+            consume(block)
+    else:
+        decompressor = zlib.decompressobj(-15)
+        while remaining_compressed:
+            block = raw.read(min(STREAM_CHUNK_BYTES, remaining_compressed))
+            if not block:
+                raise BackupError("A compressed archive member is truncated.")
+            remaining_compressed -= len(block)
+            pending = block
+            while pending:
+                output = decompressor.decompress(pending, output_limit())
+                consume(output)
+                if decompressor.unused_data:
+                    raise BackupError("A compressed archive member has trailing data.")
+                next_pending = decompressor.unconsumed_tail
+                if next_pending == pending and not output:
+                    raise BackupError(
+                        "A compressed archive member could not make progress."
+                    )
+                pending = next_pending
+        while True:
+            output = decompressor.decompress(b"", output_limit())
+            if not output:
+                break
+            consume(output)
+        if (
+            not decompressor.eof
+            or decompressor.unused_data
+            or decompressor.unconsumed_tail
+        ):
+            raise BackupError("A compressed archive member is incomplete or malformed.")
+
+    if (
+        member_bytes != metadata["uncompressed_size"]
+        or (crc_actual & 0xFFFFFFFF) != metadata["crc"]
+    ):
+        raise BackupError("An archive member size or CRC does not match its contents.")
+    return (
+        member_bytes,
+        digest.hexdigest(),
+        bytes(collected) if collected is not None else None,
+        total_bytes,
+    )
+
+
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise BackupError("The archive manifest contains duplicate JSON keys.")
+        result[key] = value
+    return result
+
+
 def verify_bundle(path: Path) -> dict[str, Any]:
     try:
-        with zipfile.ZipFile(path, mode="r") as bundle:
+        preflight_entries, directory_start = _preflight_zip(path)
+        with path.open("rb") as raw, zipfile.ZipFile(path, mode="r") as bundle:
             members = bundle.infolist()
-            names = [member.filename for member in members]
-            if len(names) != len(set(names)) or names.count(MANIFEST_NAME) != 1:
+            if len(members) != len(preflight_entries):
                 raise BackupError(
-                    "The archive has duplicate entries or no unique manifest."
+                    "The archive entry count changed during verification."
                 )
-            payload_names = [name for name in names if name != MANIFEST_NAME]
-            if any(
-                not _safe_archive_path(name)
-                or not _in_scope(name)
-                or _is_excluded(name)
-                for name in payload_names
-            ):
-                raise BackupError(
-                    "The archive contains an unsafe or out-of-scope path."
+
+            payload_metadata: dict[str, tuple[int, str]] = {}
+            manifest_bytes: bytes | None = None
+            actual_total = 0
+            for member, metadata in zip(members, preflight_entries, strict=True):
+                if member.filename != metadata["name"]:
+                    raise BackupError(
+                        "The archive entry order or names are inconsistent."
+                    )
+                size, digest, content, actual_total = _stream_zip_member(
+                    raw,
+                    member,
+                    metadata,
+                    directory_start=directory_start,
+                    total_so_far=actual_total,
                 )
-            for member in members:
-                mode = (member.external_attr >> 16) & 0xFFFF
-                if stat.S_ISLNK(mode):
-                    raise BackupError("The archive contains a symbolic link.")
-                if bundle.read(member) is None:
-                    raise BackupError("The archive contains an unreadable entry.")
-            manifest = json.loads(bundle.read(MANIFEST_NAME).decode("utf-8"))
+                if metadata["name"] == MANIFEST_NAME:
+                    manifest_bytes = content
+                else:
+                    payload_metadata[metadata["name"]] = (size, digest)
+
+            if manifest_bytes is None:
+                raise BackupError("The archive has no readable manifest.")
+            manifest = json.loads(
+                manifest_bytes.decode("utf-8"), object_pairs_hook=_unique_json_object
+            )
             if (
                 not isinstance(manifest, dict)
                 or manifest.get("schema_version") != 1
@@ -517,8 +899,10 @@ def verify_bundle(path: Path) -> dict[str, Any]:
             ):
                 raise BackupError("The archive manifest has an invalid Git commit.")
             declared = manifest.get("files")
-            if not isinstance(declared, list):
-                raise BackupError("The archive manifest file list is invalid.")
+            if not isinstance(declared, list) or len(declared) > MAX_FILES:
+                raise BackupError(
+                    "The archive manifest file list is invalid or excessive."
+                )
             declared_by_name: dict[str, dict[str, Any]] = {}
             for item in declared:
                 if not isinstance(item, dict) or not isinstance(item.get("path"), str):
@@ -526,30 +910,37 @@ def verify_bundle(path: Path) -> dict[str, Any]:
                         "The archive manifest contains an invalid file record."
                     )
                 file_name = item["path"]
-                if file_name in declared_by_name or not _safe_archive_path(file_name):
+                if (
+                    file_name in declared_by_name
+                    or not _safe_archive_path(file_name)
+                    or file_name not in payload_metadata
+                ):
                     raise BackupError(
                         "The archive manifest contains duplicate or unsafe paths."
                     )
                 declared_by_name[file_name] = item
-            if set(declared_by_name) != set(payload_names):
+            if set(declared_by_name) != set(payload_metadata):
                 raise BackupError("The archive contents do not match the manifest.")
             for file_name, item in declared_by_name.items():
-                content = bundle.read(file_name)
                 expected = item.get("sha256")
+                actual_size, actual_digest = payload_metadata[file_name]
+                declared_size = item.get("size_bytes")
                 if (
                     not isinstance(expected, str)
                     or len(expected) != 64
-                    or hashlib.sha256(content).hexdigest() != expected
+                    or actual_digest != expected
                 ):
                     raise BackupError(
                         "A file hash does not match the archive manifest."
                     )
-                if item.get("size_bytes") != len(content):
+                if (
+                    not isinstance(declared_size, int)
+                    or isinstance(declared_size, bool)
+                    or declared_size != actual_size
+                ):
                     raise BackupError(
                         "A file size does not match the archive manifest."
                     )
-            if bundle.testzip() is not None:
-                raise BackupError("The archive failed its ZIP integrity check.")
     except BackupError:
         raise
     except (
@@ -558,11 +949,18 @@ def verify_bundle(path: Path) -> dict[str, Any]:
         UnicodeError,
         json.JSONDecodeError,
         KeyError,
+        struct.error,
+        zlib.error,
+        EOFError,
+        RuntimeError,
+        ValueError,
+        OverflowError,
+        RecursionError,
     ) as exc:
         raise BackupError("The archive or its manifest is invalid or corrupt.") from exc
     return {
         "git_commit": commit,
-        "file_count": len(payload_names),
+        "file_count": len(payload_metadata),
         "created_at_utc": manifest.get("created_at_utc"),
     }
 

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import struct
 import subprocess
 import tempfile
 import unittest
+import warnings
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -91,6 +93,57 @@ class BackupItmcTests(unittest.TestCase):
                     content = replace(name, content)
                 changed.writestr(name, content)
 
+    @staticmethod
+    def _write_manifest_archive(path: Path, files: dict[str, bytes]) -> None:
+        manifest = {
+            "schema_version": 1,
+            "created_at_utc": "2026-11-05T17:45:00Z",
+            "git_commit": "0" * 40,
+            "format": "zip",
+            "files": [
+                {
+                    "path": name,
+                    "size_bytes": len(content),
+                    "sha256": backup_itmc.hashlib.sha256(content).hexdigest(),
+                }
+                for name, content in sorted(files.items())
+            ],
+        }
+        with zipfile.ZipFile(
+            path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
+        ) as archive:
+            for name, content in sorted(files.items()):
+                archive.writestr(name, content)
+            archive.writestr(
+                backup_itmc.MANIFEST_NAME,
+                json.dumps(manifest, sort_keys=True).encode("utf-8"),
+            )
+
+    @staticmethod
+    def _forge_declared_size(path: Path, name: str, declared_size: int) -> None:
+        with zipfile.ZipFile(path, "r") as archive:
+            member = archive.getinfo(name)
+            local_offset = member.header_offset
+        raw = bytearray(path.read_bytes())
+        struct.pack_into("<I", raw, local_offset + 22, declared_size)
+
+        cursor = 0
+        while True:
+            cursor = raw.find(b"PK\x01\x02", cursor)
+            if cursor < 0:
+                raise AssertionError("synthetic ZIP central directory was not found")
+            name_size = struct.unpack_from("<H", raw, cursor + 28)[0]
+            extra_size = struct.unpack_from("<H", raw, cursor + 30)[0]
+            comment_size = struct.unpack_from("<H", raw, cursor + 32)[0]
+            encoded_name = raw[cursor + 46 : cursor + 46 + name_size]
+            flags = struct.unpack_from("<H", raw, cursor + 8)[0]
+            encoding = "utf-8" if flags & 0x0800 else "cp437"
+            if encoded_name.decode(encoding) == name:
+                struct.pack_into("<I", raw, cursor + 24, declared_size)
+                break
+            cursor += 46 + name_size + extra_size + comment_size
+        path.write_bytes(raw)
+
     def test_committed_snapshot_excludes_tracked_local_secrets_and_runtime_data(
         self,
     ) -> None:
@@ -161,6 +214,99 @@ class BackupItmcTests(unittest.TestCase):
         with self.assertRaises(backup_itmc.BackupError):
             backup_itmc.verify_bundle(corrupted)
 
+    def test_rejects_excessive_entry_count_before_zipinfo_expansion(self) -> None:
+        archive_path = self.destination / "too-many-entries.zip"
+        with zipfile.ZipFile(archive_path, "w") as archive:
+            for index in range(4):
+                archive.writestr(f"config/file-{index}.txt", b"x")
+        with patch.object(backup_itmc, "MAX_ARCHIVE_ENTRIES", 3):
+            with self.assertRaisesRegex(backup_itmc.BackupError, "too many entries"):
+                backup_itmc.verify_bundle(archive_path)
+
+    def test_rejects_duplicate_zip_entry_names(self) -> None:
+        archive_path = self.destination / "duplicate-entry.zip"
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.writestr("README.md", b"first")
+                archive.writestr("README.md", b"second")
+        with self.assertRaisesRegex(backup_itmc.BackupError, "duplicate"):
+            backup_itmc.verify_bundle(archive_path)
+
+    def test_rejects_unsafe_zip_paths(self) -> None:
+        archive_path = self.destination / "unsafe-entry.zip"
+        with zipfile.ZipFile(archive_path, "w") as archive:
+            archive.writestr("../outside.txt", b"not extracted")
+        with self.assertRaisesRegex(backup_itmc.BackupError, "unsafe"):
+            backup_itmc.verify_bundle(archive_path)
+
+    def test_rejects_compressed_archive_and_manifest_limits(self) -> None:
+        oversized_archive = self.destination / "oversized-archive.zip"
+        oversized_archive.write_bytes(b"x" * 128)
+        with patch.object(backup_itmc, "MAX_ARCHIVE_BYTES", 64):
+            with self.assertRaisesRegex(backup_itmc.BackupError, "compressed size"):
+                backup_itmc.verify_bundle(oversized_archive)
+
+        oversized_manifest = self.destination / "oversized-manifest.zip"
+        with zipfile.ZipFile(oversized_manifest, "w") as archive:
+            archive.writestr(backup_itmc.MANIFEST_NAME, b"x" * 257)
+        with patch.object(backup_itmc, "MAX_MANIFEST_BYTES", 256):
+            with self.assertRaisesRegex(backup_itmc.BackupError, "uncompressed size"):
+                backup_itmc.verify_bundle(oversized_manifest)
+
+    def test_malformed_deep_manifest_is_reported_as_safe_backup_error(self) -> None:
+        archive_path = self.destination / "deep-manifest.zip"
+        with zipfile.ZipFile(
+            archive_path, "w", compression=zipfile.ZIP_DEFLATED
+        ) as archive:
+            archive.writestr(
+                backup_itmc.MANIFEST_NAME, b"[" * 5000 + b"0" + b"]" * 5000
+            )
+        with self.assertRaisesRegex(
+            backup_itmc.BackupError, "archive or its manifest is invalid or corrupt"
+        ):
+            backup_itmc.verify_bundle(archive_path)
+
+    def test_actual_stream_limit_rejects_forged_small_zipinfo_size(self) -> None:
+        archive_path = self.destination / "forged-member-size.zip"
+        self._write_manifest_archive(archive_path, {"config/blob.bin": b"A" * 4096})
+        self._forge_declared_size(archive_path, "config/blob.bin", 1)
+        with patch.object(backup_itmc, "MAX_SOURCE_BYTES", 512):
+            with self.assertRaisesRegex(
+                backup_itmc.BackupError, "actual uncompressed size"
+            ):
+                backup_itmc.verify_bundle(archive_path)
+
+    def test_actual_manifest_limit_rejects_forged_small_zipinfo_size(self) -> None:
+        archive_path = self.destination / "forged-manifest-size.zip"
+        with zipfile.ZipFile(
+            archive_path, "w", compression=zipfile.ZIP_DEFLATED
+        ) as archive:
+            archive.writestr(backup_itmc.MANIFEST_NAME, b"A" * 4096)
+        self._forge_declared_size(archive_path, backup_itmc.MANIFEST_NAME, 1)
+        with patch.object(backup_itmc, "MAX_MANIFEST_BYTES", 512):
+            with self.assertRaisesRegex(
+                backup_itmc.BackupError, "actual uncompressed size"
+            ):
+                backup_itmc.verify_bundle(archive_path)
+
+    def test_actual_total_limit_rejects_forged_small_entry_sizes(self) -> None:
+        archive_path = self.destination / "forged-total-size.zip"
+        self._write_manifest_archive(
+            archive_path,
+            {"config/a.bin": b"A" * 300, "config/b.bin": b"B" * 300},
+        )
+        self._forge_declared_size(archive_path, backup_itmc.MANIFEST_NAME, 1)
+        with (
+            patch.object(backup_itmc, "MAX_SOURCE_BYTES", 1024),
+            patch.object(backup_itmc, "MAX_MANIFEST_BYTES", 1024),
+            patch.object(backup_itmc, "MAX_TOTAL_UNCOMPRESSED_BYTES", 700),
+        ):
+            with self.assertRaisesRegex(
+                backup_itmc.BackupError, "actual total uncompressed size"
+            ):
+                backup_itmc.verify_bundle(archive_path)
+
     def test_tampered_file_and_altered_manifest_hash_are_rejected(self) -> None:
         archive = self._create()
         changed_content = self.destination / "changed-content.zip"
@@ -208,6 +354,8 @@ class BackupItmcTests(unittest.TestCase):
     def test_archive_paths_reject_windows_drive_and_ads_syntax(self) -> None:
         self.assertFalse(backup_itmc._safe_archive_path("C:/outside.txt"))
         self.assertFalse(backup_itmc._safe_archive_path("README.md:stream"))
+        self.assertFalse(backup_itmc._safe_archive_path("config//duplicate-path.txt"))
+        self.assertFalse(backup_itmc._safe_archive_path("config/./dot-path.txt"))
 
     def test_missing_encryption_attestation_is_rejected(self) -> None:
         with self.assertRaises(backup_itmc.BackupError):

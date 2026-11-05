@@ -11,8 +11,8 @@ Los nombres de volúmenes declarados en Compose están en [backup-recovery.md](.
 En PowerShell, desde el checkout:
 
 ```powershell
-.scripts\inventory-itmc.ps1
-.scripts\backup-itmc.ps1
+.\scripts\inventory-itmc.ps1
+.\scripts\backup-itmc.ps1
 ```
 
 El primer comando inspecciona solo los metadatos permitidos por el helper. El segundo usa `Plan`; no crea archivos ni toca volúmenes. Registra el resultado por canal interno aprobado y redacta cualquier detalle de host; no guardes logs crudos en GitHub/PR. Si el Engine no está disponible, la salida será `not_inspected` y la verificación queda pendiente. No intentes iniciar Docker Desktop como parte de una auditoría que no lo autoriza.
@@ -21,7 +21,7 @@ El primer comando inspecciona solo los metadatos permitidos por el helper. El se
 
 1. Selecciona un directorio local ya existente, fuera del checkout y de directorios sincronizados, con cifrado de disco/medio verificado y espacio suficiente. No uses red compartida para este modo.
 2. Confirma `git status --short --branch` limpio. El backup solo corresponde al commit `HEAD`; no incluye edición sin commit.
-3. Ejecuta el plan (`scripts/backup-itmc.ps1` sin parámetros) y revisa el alcance, exclusiones y capacidad estimada.
+3. Ejecuta el plan (`.\scripts\backup-itmc.ps1` sin parámetros) y revisa el alcance, exclusiones y capacidad estimada.
 4. Solo tras confirmar destino cifrado, ejecuta:
 
    ```powershell

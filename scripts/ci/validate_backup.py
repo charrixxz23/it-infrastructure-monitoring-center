@@ -105,6 +105,28 @@ def main() -> int:
         ERRORS.append(
             "The backup manifest is missing timestamp, commit, or SHA-256 metadata."
         )
+    for required in (
+        "MAX_ARCHIVE_ENTRIES",
+        "MAX_ARCHIVE_BYTES",
+        "MAX_MANIFEST_BYTES",
+        "MAX_TOTAL_UNCOMPRESSED_BYTES",
+        "MAX_CENTRAL_DIRECTORY_BYTES",
+        "def _preflight_zip(",
+        "def _stream_zip_member(",
+        "hashlib.sha256()",
+    ):
+        if required not in helper:
+            ERRORS.append(
+                "ZIP verification is missing a required bounded-streaming guard."
+            )
+            break
+    if (
+        r".\scripts\inventory-itmc.ps1" not in runbook
+        or r".\scripts\backup-itmc.ps1" not in runbook
+    ):
+        ERRORS.append(
+            "The disaster recovery runbook is missing working PowerShell commands."
+        )
 
     if ERRORS:
         for error in ERRORS:
@@ -112,7 +134,7 @@ def main() -> int:
         return 1
     print(
         "PASS: fixed volume inventory, read-only Docker inspection, Plan-by-default, secret exclusions, "
-        "manifest integrity fields, consistency warnings, and synthetic CI coverage are present."
+        "bounded ZIP streaming, manifest integrity fields, consistency warnings, and synthetic CI coverage are present."
     )
     return 0
 
