@@ -1,6 +1,6 @@
 # Runbook — optional external heartbeat
 
-**Current state:** disabled. Option B includes the agent firewall, Squid ACL, and an independent DROP-by-default firewall in the namespace shared by Squid. Runtime checks on Docker Desktop/WSL2 used synthetic endpoints and verified allowed and denied routes for that filter. They did not contact Healthchecks.io or prove protection from a compromised policy supervisor or Docker host. The owner reports that the Healthchecks.io project/check exists with a 2-minute period, 2-minute grace, and email notification. The Ping URL is not stored locally or mounted into Docker. No provider DNS lookup, CONNECT/TLS handshake, real ping, missed-heartbeat notification, or recovery test has been validated. A provider CONNECT/TLS test is prepared below but requires explicit owner authorization.
+**Current state:** disabled. Synthetic runtime checks verified allowed and denied namespace-filter routes on Docker Desktop/WSL2. The owner separately authorized and executed a limited external DNS + CONNECT + TLS test to `hc-ping.com:443`, which returned `PASS: CONNECT and TLS verified; no HTTP request or Ping URL was sent.` The policy supervisor and proxy were started temporarily and then stopped. The supervisor was initially observed as `starting`; no independent evidence confirms it reached `healthy`. The temporary client used UID/GID 65534, no capabilities, and read-only storage. The heartbeat agent never started and no ping was sent. The owner reports that all six original services remained healthy. The Ping URL is not stored locally or mounted into Docker. Missed-heartbeat notification and recovery remain untested. This evidence does not establish protection from a compromised policy supervisor or Docker host.
 
 ## Prerequisites and scope
 
@@ -57,28 +57,36 @@ Before handling the Ping URL, review the runtime isolation evidence and threat m
 
    These commands start only the policy supervisor, proxy, and agent dependencies requested by Compose; they do not recreate existing monitoring services. The agent has no direct uplink and waits for required internal endpoints and the proxy. On a healthy cycle it sends a real provider ping. Do not use a synthetic test URL for production activation.
 
-## Prepared CONNECT and TLS check — explicit authorization required
+## Limited CONNECT and TLS check — completed once; re-runs require authorization
 
-This controlled diagnostic is **not authorized or executed as part of this PR review**. It does not require, mount, read, or send the Ping URL. It makes a DNS lookup for the fixed hostname when the policy sidecar starts, opens one CONNECT tunnel to `hc-ping.com:443`, and performs a certificate-verified TLS handshake. It sends no HTTP request or Ping path. The DNS lookup and TLS handshake contact external infrastructure, so run these steps only after the owner explicitly authorizes that contact.
+The owner authorized and completed this controlled diagnostic once. The observed result was `PASS: CONNECT and TLS verified; no HTTP request or Ping URL was sent.` It makes a DNS lookup for the fixed hostname, opens a CONNECT tunnel to `hc-ping.com:443`, and performs a certificate-verified TLS handshake. It does not require, mount, read, or send the Ping URL, and sends no HTTP request or Ping path. Each future run contacts external infrastructure and therefore requires explicit owner authorization.
 
-After that authorization, ensure the heartbeat sender is not running and the fixed private client address is unused. Build the agent image without starting it, then start only the policy/proxy pair. This resolves current DNS A records but sends no HTTP request:
+For a future authorized re-run, ensure the heartbeat sender is not running and the fixed private client address is unused. Build a temporary image with an explicit tag; do not use `docker compose images -q`, which may return no image when the service has no container. Then start only the policy/proxy pair. Building does not start the agent:
 
 ```powershell
-docker compose -f compose.yaml -f compose.heartbeat.yaml build heartbeat-agent
+$probeImage = 'itmc-heartbeat-agent-tls-probe:local'
+docker build --tag $probeImage --file services/heartbeat-agent/Dockerfile services/heartbeat-agent
 docker compose -f compose.yaml -f compose.heartbeat.yaml up -d heartbeat-egress-proxy
+```
+
+Before running the temporary client, inspect the policy service health. Do not infer `healthy` from an initial `starting` state:
+
+```powershell
+$policyId = (docker compose -f compose.yaml -f compose.heartbeat.yaml ps -q heartbeat-egress-policy).Trim()
+docker inspect --format '{{.State.Health.Status}}' $policyId
 ```
 
 Run the prepared tool as a non-root temporary client on the private proxy network. It has no capabilities, no secret mount, and no uplink network; Squid sees the source address it already permits:
 
 ```powershell
-$agentImage = (docker compose -f compose.yaml -f compose.heartbeat.yaml images -q heartbeat-agent | Select-Object -First 1).Trim()
-docker run --rm --network itmc-heartbeat-proxy-private --ip 172.31.255.251 --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges:true --read-only --entrypoint python $agentImage /app/provider_tls_probe.py --authorize-provider-contact
+docker run --rm --network itmc-heartbeat-proxy-private --ip 172.31.255.251 --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges:true --read-only --entrypoint python $probeImage /app/provider_tls_probe.py --authorize-provider-contact
 ```
 
-The tool reports only success or a sanitized error. `PASS` establishes the exact-host CONNECT and TLS handshake at that time; it does not prove future DNS stability or a heartbeat ping. The explicit flag is a per-run guard, not a substitute for owner approval. The temporary client is removed automatically. Afterwards, stop only the policy/proxy pair:
+The tool reports only success or a sanitized error. `PASS` establishes the exact-host CONNECT and TLS handshake at that time; it does not prove future DNS stability or a heartbeat ping. The explicit flag is a per-run guard, not a substitute for owner approval. The temporary client is removed automatically. Afterwards, stop the policy/proxy pair and remove only the explicitly tagged test image:
 
 ```powershell
 docker compose -f compose.yaml -f compose.heartbeat.yaml stop heartbeat-egress-proxy heartbeat-egress-policy
+docker image rm $probeImage
 ```
 
 ## Observe and troubleshoot
@@ -103,7 +111,7 @@ Stop only the opt-in agent, using the same override so Compose identifies the se
 docker compose -f compose.yaml -f compose.heartbeat.yaml stop heartbeat-agent heartbeat-egress-proxy heartbeat-egress-policy
 ```
 
-This stops only the two opt-in services. Remove the override from future commands; the default stack and its networks remain unchanged. After stopping both services, securely delete `.secrets/healthchecks-ping-url` if no longer needed and remove the provider-side check through its authorized UI if the owner wants to disable monitoring entirely. Do not delete shared monitoring volumes.
+This stops the three opt-in services: agent, proxy, and policy supervisor. Remove the override from future commands; the default stack and its networks remain unchanged. After stopping them, securely delete `.secrets/healthchecks-ping-url` if no longer needed and remove the provider-side check through its authorized UI if the owner wants to disable monitoring entirely. Do not delete shared monitoring volumes.
 
 ## Ping URL compromise
 
